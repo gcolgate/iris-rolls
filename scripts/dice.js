@@ -54,7 +54,7 @@ export function serializeDamage(rolls=[]) {
   }));
 }
 
-export async function rollDualDamage(activity, { isCritical=false }={}) {
+export async function rollNormalAndCritDamage(activity, { isCritical=false }={}) {
   const a = await rollQuiet(activity, "rollDamage", { isCritical });
   return {
     a: serializeDamage(a),

@@ -1,6 +1,6 @@
 import { MODULE_ID, TEMPLATE, localize, renderHbs, getPayload, hasPayload } from "./constants.js";
 import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, isDexSave, maxTargetCount, liveTemplateUuids, tokensInTemplates, targetsFromTokens, selectTokens, setRollerFromActor, placeActivityTemplates, deleteTemplates } from "./targets.js";
-import { dualFromRoll, usedDieIndex, damageTotal, selectDamage, rollQuiet, rollDualDamage } from "./dice.js";
+import { dualFromRoll, usedDieIndex, damageTotal, selectDamage, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import {
   listSlotOptions, listSpellPointOptions, remainingConsumption, remainingResources, ownedUpdate, restoreRecord,
   refundRemaining, refundResources, consumeSpellSlot, consumeSpellPoints, scaledActivity, slotLevelLabel,
@@ -854,9 +854,9 @@ async function onSlotChange(message, newKey) {
   }
   if (activity && (payload.damage || payload.kind === "attack" || payload.kind === "save"
     || payload.kind === "damage" || payload.kind === "heal")) {
-    payload.damage = await rollDualDamage(activity, { isCritical: false });
+    payload.damage = await rollNormalAndCritDamage(activity, { isCritical: false });
     if (payload.kind === "attack" || payload.kind === "damage") {
-      payload.critDamage = await rollDualDamage(activity, { isCritical: true });
+      payload.critDamage = await rollNormalAndCritDamage(activity, { isCritical: true });
     }
   }
   const actName = item.system.activities?.get(payload.activityId)?.name;

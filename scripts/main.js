@@ -1,6 +1,6 @@
 import { MODULE_ID, TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
 import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller } from "./targets.js";
-import { dualFromRoll, rollQuiet, rollDualDamage } from "./dice.js";
+import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel } from "./resources.js";
 
@@ -112,8 +112,8 @@ async function handleActivity(activity, usageConfig={}, results={}) {
       const attackRolls = await rollQuiet(activity, "rollAttack");
       if (!attackRolls[0]) return;
       const dual = await dualFromRoll(attackRolls[0]);
-      const damage = await rollDualDamage(rolling, { isCritical: false });
-      const critDamage = await rollDualDamage(rolling, { isCritical: true });
+      const damage = await rollNormalAndCritDamage(rolling, { isCritical: false });
+      const critDamage = await rollNormalAndCritDamage(rolling, { isCritical: true });
       await postCard({
         ...base,
         kind: "attack",
@@ -127,8 +127,8 @@ async function handleActivity(activity, usageConfig={}, results={}) {
 
     if (activity.type === "save") {
       const dc = await rollTargetSaves(activity, targets);
-      const damage = await rollDualDamage(rolling, { isCritical: false });
-      const critDamage = await rollDualDamage(rolling, { isCritical: false });
+      const damage = await rollNormalAndCritDamage(rolling, { isCritical: false });
+      const critDamage = await rollNormalAndCritDamage(rolling, { isCritical: false });
       await postCard({
         ...base,
         kind: "save",
@@ -142,8 +142,8 @@ async function handleActivity(activity, usageConfig={}, results={}) {
     }
 
     if (activity.type === "damage" || activity.type === "heal") {
-      const damage = await rollDualDamage(rolling, { isCritical: false });
-      const critDamage = await rollDualDamage(rolling, { isCritical: activity.type === "damage" });
+      const damage = await rollNormalAndCritDamage(rolling, { isCritical: false });
+      const critDamage = await rollNormalAndCritDamage(rolling, { isCritical: activity.type === "damage" });
       await postCard({
         ...base,
         kind: activity.type,
