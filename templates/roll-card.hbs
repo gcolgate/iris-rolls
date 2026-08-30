@@ -1,0 +1,170 @@
+<div class="iris-card{{#if isSave}} iris-save{{/if}}{{#if manyTargets}} iris-many{{/if}}" data-iris-card="{{mode}}">
+  <header>
+    {{#if itemImg}}<img src="{{itemImg}}" alt="">{{/if}}
+    <div class="iris-title">
+      <h3>{{title}}</h3>
+      <div class="iris-subtitle">{{subtitle}}</div>
+    </div>
+  </header>
+
+  <div class="iris-parties">
+    <section class="iris-party iris-roller-block">
+      <h4>{{localize "IRISROLLS.Roller"}}</h4>
+      <div class="iris-actor">
+        <img src="{{roller.img}}" alt="{{roller.name}}">
+        <span class="iris-name">{{roller.name}}</span>
+      </div>
+    </section>
+    {{#unless hideTargets}}
+    <section class="iris-party iris-target-block">
+      <h4>{{localize "IRISROLLS.Targets"}}</h4>
+      {{#if targets.length}}
+      <div class="iris-targets">
+        {{#each targets}}
+        <div class="iris-target">
+          <img src="{{img}}" alt="{{name}}">
+          <div class="iris-target-main">
+            <span class="iris-name">{{name}}</span>
+            {{#if saveDetail}}<span class="iris-save-detail">{{saveDetail}}</span>{{/if}}
+            {{#if tags.length}}
+            <span class="iris-tags">
+              {{#each tags}}<span class="iris-tag {{css}}">{{label}}</span>{{/each}}
+            </span>
+            {{/if}}
+          </div>
+          {{#if saveDice}}
+          <span class="iris-mini-dice">
+            {{#each saveDice}}<span class="iris-mini {{css}}">{{value}}</span>{{/each}}
+          </span>
+          {{/if}}
+          {{#if outcomeLabel}}
+          <span class="iris-outcome {{outcomeClass}}">{{outcomeLabel}}</span>
+          {{/if}}
+          {{#if appliedLabel}}
+          <span class="iris-applied">{{appliedLabel}}</span>
+          {{/if}}
+        </div>
+        {{/each}}
+      </div>
+      {{else}}
+      <div class="iris-muted">{{localize "IRISROLLS.NoTarget"}}</div>
+      {{/if}}
+    </section>
+    {{/unless}}
+  </div>
+
+  {{#if hasD20}}
+  <div class="iris-dice">
+    {{#each dice}}
+    <div class="iris-die {{css}}">
+      <span class="iris-face">{{value}}</span>
+      <span class="iris-die-label">{{label}}</span>
+    </div>
+    {{/each}}
+  </div>
+  <div class="iris-total-wrap">
+    <div class="iris-total">
+      {{localize "IRISROLLS.Total"}} {{displayTotal}}
+      {{#if versus}}<span class="iris-vs">{{versus}}</span>{{/if}}
+    </div>
+  </div>
+  {{/if}}
+
+  {{#if showModes}}
+  <div class="iris-modes">
+    <button type="button" data-iris-action="mode" data-mode="disadvantage" class="{{#if modeDisadvantage}}active{{/if}}">{{localize "IRISROLLS.Disadvantage"}}</button>
+    <button type="button" data-iris-action="mode" data-mode="normal" class="{{#if modeNormal}}active{{/if}}">{{localize "IRISROLLS.Normal"}}</button>
+    <button type="button" data-iris-action="mode" data-mode="advantage" class="{{#if modeAdvantage}}active{{/if}}">{{localize "IRISROLLS.Advantage"}}</button>
+  </div>
+  <label class="iris-bonus">
+    <span>{{localize "IRISROLLS.Bonus"}}</span>
+    <input type="number" name="situational" data-iris-action="bonus" value="{{situational}}" step="1">
+  </label>
+  {{/if}}
+
+  {{#if showSlots}}
+  <label class="iris-slot">
+    <span>{{slotLabel}}</span>
+    <select name="spellSlot" data-iris-action="slot">
+      {{#each slotOptions}}
+      <option value="{{value}}" {{#if selected}}selected{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </label>
+  {{/if}}
+
+  {{#if consumeLabel}}
+  <div class="iris-consume">
+    <span>{{localize "IRISROLLS.Used"}} {{consumeLabel}}</span>
+    {{#if canRefund}}<button type="button" class="iris-mini" data-iris-action="refund">{{localize "IRISROLLS.Refund"}}</button>{{/if}}
+  </div>
+  {{else if canRefund}}
+  <div class="iris-consume">
+    <button type="button" class="iris-mini" data-iris-action="refund">{{localize "IRISROLLS.Refund"}}</button>
+  </div>
+  {{/if}}
+
+  {{#if hasDamage}}
+  <section class="iris-damage{{#if isCrit}} is-crit{{/if}}">
+    <h4>{{damageLabel}}</h4>
+    {{#each damageLines}}
+    <div class="iris-dmg-line used">
+      <span>{{formula}} {{type}}</span>
+      <span>{{total}}</span>
+    </div>
+    {{/each}}
+    {{#each otherDamageLines}}
+    <div class="iris-dmg-line unused">
+      <span>{{formula}} {{type}}</span>
+      <span>{{total}}</span>
+    </div>
+    {{/each}}
+    <div class="iris-dmg-total">{{damageTotal}}</div>
+    {{#if onSaveLabel}}<div class="iris-on-save">{{onSaveLabel}}</div>{{/if}}
+  </section>
+  {{/if}}
+
+  {{#if concentrationHeld}}
+  <div class="iris-conc-result success">{{localize "IRISROLLS.ConcentrationHeld"}}</div>
+  {{/if}}
+  {{#if concentrationDropped}}
+  <div class="iris-conc-result failure">{{localize "IRISROLLS.ConcentrationBroken"}}</div>
+  {{/if}}
+
+  {{#if effectLabel}}
+  <div class="iris-effect-line">{{effectLabel}}</div>
+  {{/if}}
+
+  <div class="iris-actions">
+    {{#if showDropConcentration}}
+    <button type="button" class="iris-apply" data-iris-action="apply">{{applyLabel}}</button>
+    {{else if hasApply}}
+    <button type="button" class="iris-apply{{#if damageApplied}} is-applied{{/if}}" data-iris-action="apply" {{#if damageApplied}}disabled{{/if}}>{{applyLabel}}</button>
+    {{#if damageApplied}}
+    <button type="button" class="iris-mini" data-iris-action="reenable" title="{{localize 'IRISROLLS.ReenableHint'}}">{{localize "IRISROLLS.Reenable"}}</button>
+    {{/if}}
+    {{/if}}
+    {{#unless hideRetarget}}
+    <button type="button" data-iris-action="retarget">{{localize "IRISROLLS.ChangeTargets"}}</button>
+    {{/unless}}
+  </div>
+  {{#if hasTemplate}}
+  <div class="iris-template-actions">
+    <button type="button" data-iris-action="clear-template" title="{{localize 'IRISROLLS.RemoveTemplateHint'}}">{{localize "IRISROLLS.RemoveTemplate"}}</button>
+    <button type="button" data-iris-action="replace-template" title="{{localize 'IRISROLLS.ReplaceTemplateHint'}}">{{localize "IRISROLLS.ReplaceTemplate"}}</button>
+  </div>
+  {{/if}}
+  {{#if showLore}}
+  <div class="iris-tools">
+    <button type="button" class="iris-mini" data-iris-action="lore">{{localize "IRISROLLS.Description"}}</button>
+    {{#if showUndo}}
+    <button type="button" class="iris-mini" data-iris-action="undo">{{localize "IRISROLLS.Undo"}}</button>
+    {{/if}}
+  </div>
+  <div class="iris-lore" hidden></div>
+  {{else if showUndo}}
+  <div class="iris-tools">
+    <button type="button" class="iris-mini" data-iris-action="undo">{{localize "IRISROLLS.Undo"}}</button>
+  </div>
+  {{/if}}
+</div>
