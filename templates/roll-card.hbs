@@ -21,27 +21,72 @@
       {{#if targets.length}}
       <div class="iris-targets">
         {{#each targets}}
-        <div class="iris-target">
-          <img src="{{img}}" alt="{{name}}">
-          <div class="iris-target-main">
-            <span class="iris-name">{{name}}</span>
-            {{#if saveDetail}}<span class="iris-save-detail">{{saveDetail}}</span>{{/if}}
-            {{#if tags.length}}
-            <span class="iris-tags">
-              {{#each tags}}<span class="iris-tag {{css}}">{{label}}</span>{{/each}}
-            </span>
+        <div class="iris-target" data-target-uuid="{{targetKey}}">
+          <div class="iris-target-row">
+            <img src="{{img}}" alt="{{name}}">
+            <div class="iris-target-main">
+              <span class="iris-name">{{name}}</span>
+              {{#if attackDetail}}<span class="iris-attack-detail">{{attackDetail}}</span>{{/if}}
+              {{#if saveDetail}}<span class="iris-save-detail">{{saveDetail}}</span>{{/if}}
+              {{#if tags.length}}
+              <span class="iris-tags">
+                {{#each tags}}<span class="iris-tag {{css}}">{{label}}</span>{{/each}}
+              </span>
+              {{/if}}
+            </div>
+            {{#if outcomeLabel}}
+            <span class="iris-outcome {{outcomeClass}}">{{outcomeLabel}}</span>
+            {{/if}}
+            {{#if appliedLabel}}
+            <span class="iris-applied" data-tooltip="{{diceTooltip}}" data-tooltip-class="iris-dmg-tooltip">{{appliedLabel}}</span>
+            {{/if}}
+            {{#if showReact}}
+            <button type="button" class="iris-react" data-iris-action="react" data-target-uuid="{{targetKey}}">{{localize "IRISROLLS.React"}}</button>
             {{/if}}
           </div>
-          {{#if saveDice}}
-          <span class="iris-mini-dice">
-            {{#each saveDice}}<span class="iris-mini {{css}}">{{value}}</span>{{/each}}
-          </span>
+          {{#if showTargetModes}}
+          <div class="iris-target-roll">
+            {{#if targetDice}}
+            <div class="iris-dice iris-target-dice">
+              {{#each targetDice}}
+              {{#if clickable}}
+              <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-target-uuid="{{../targetKey}}" title="{{localize 'IRISROLLS.AdjustDieHint'}}">
+                <span class="iris-face">{{value}}</span>
+                <span class="iris-die-label">{{label}}</span>
+              </button>
+              {{else}}
+              <div class="iris-die {{css}}">
+                <span class="iris-face">{{value}}</span>
+                <span class="iris-die-label">{{label}}</span>
+              </div>
+              {{/if}}
+              {{/each}}
+            </div>
+            {{/if}}
+            <label class="iris-bonus iris-target-bonus">
+              <span>{{localize "IRISROLLS.Bonus"}}</span>
+              <input type="number" name="situational" data-target-uuid="{{targetKey}}" value="{{targetBonus}}" step="1">
+            </label>
+          </div>
+          <div class="iris-modes iris-target-modes">
+            <button type="button" data-iris-action="mode" data-mode="disadvantage" data-target-uuid="{{targetKey}}" class="{{#if modeDisadvantage}}active{{/if}}">{{localize "IRISROLLS.Disadvantage"}}</button>
+            <button type="button" data-iris-action="mode" data-mode="normal" data-target-uuid="{{targetKey}}" class="{{#if modeNormal}}active{{/if}}">{{localize "IRISROLLS.Normal"}}</button>
+            <button type="button" data-iris-action="mode" data-mode="advantage" data-target-uuid="{{targetKey}}" class="{{#if modeAdvantage}}active{{/if}}">{{localize "IRISROLLS.Advantage"}}</button>
+          </div>
           {{/if}}
-          {{#if outcomeLabel}}
-          <span class="iris-outcome {{outcomeClass}}">{{outcomeLabel}}</span>
-          {{/if}}
-          {{#if appliedLabel}}
-          <span class="iris-applied">{{appliedLabel}}</span>
+          {{#if damageMods.length}}
+          <div class="iris-dmg-mods">
+            {{#each damageMods}}
+            <div class="iris-dmg-mod">
+              <span class="iris-dmg-mod-label" title="{{typeLabel}}">{{typeLabel}}</span>
+              <div class="iris-mult">
+                {{#each choices}}
+                <button type="button" data-iris-action="mult" data-target-uuid="{{../targetKey}}" data-iris-type="{{../typeKey}}" data-iris-mult="{{value}}" class="{{#if selected}}active{{/if}}">{{label}}</button>
+                {{/each}}
+              </div>
+            </div>
+            {{/each}}
+          </div>
           {{/if}}
         </div>
         {{/each}}
@@ -56,12 +101,22 @@
   {{#if hasD20}}
   <div class="iris-dice">
     {{#each dice}}
+    {{#if clickable}}
+    <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" title="{{localize 'IRISROLLS.AdjustDieHint'}}">
+      <span class="iris-face">{{value}}</span>
+      <span class="iris-die-label">{{label}}</span>
+    </button>
+    {{else}}
     <div class="iris-die {{css}}">
       <span class="iris-face">{{value}}</span>
       <span class="iris-die-label">{{label}}</span>
     </div>
+    {{/if}}
     {{/each}}
   </div>
+  {{#if reliableTalentApplied}}
+  <div class="iris-rt">{{localize "IRISROLLS.ReliableTalent"}}</div>
+  {{/if}}
   <div class="iris-total-wrap">
     <div class="iris-total">
       {{localize "IRISROLLS.Total"}} {{displayTotal}}
@@ -108,18 +163,32 @@
   <section class="iris-damage{{#if isCrit}} is-crit{{/if}}">
     <h4>{{damageLabel}}</h4>
     {{#each damageLines}}
-    <div class="iris-dmg-line used">
+    <div class="iris-dmg-line used" data-tooltip="{{tooltip}}" data-tooltip-class="iris-dmg-tooltip">
       <span>{{formula}} {{type}}</span>
       <span>{{total}}</span>
     </div>
     {{/each}}
     {{#each otherDamageLines}}
-    <div class="iris-dmg-line unused">
+    <div class="iris-dmg-line unused" data-tooltip="{{tooltip}}" data-tooltip-class="iris-dmg-tooltip">
       <span>{{formula}} {{type}}</span>
       <span>{{total}}</span>
     </div>
     {{/each}}
-    <div class="iris-dmg-total">{{damageTotal}}</div>
+    <label class="iris-bonus iris-dmg-bonus">
+      <span>{{localize "IRISROLLS.BonusDamage"}}</span>
+      <input type="number" name="damageBonus" value="{{damageBonus}}" step="1">
+    </label>
+    <div class="iris-dmg-total" data-base-total="{{damageBase}}" data-tooltip="{{damageTooltip}}" data-tooltip-class="iris-dmg-tooltip">{{damageTotal}}</div>
+    {{#if critDamageLines.length}}
+    <h4>{{localize "IRISROLLS.CriticalDamage"}}</h4>
+    {{#each critDamageLines}}
+    <div class="iris-dmg-line used" data-tooltip="{{tooltip}}" data-tooltip-class="iris-dmg-tooltip">
+      <span>{{formula}} {{type}}</span>
+      <span>{{total}}</span>
+    </div>
+    {{/each}}
+    <div class="iris-dmg-total" data-tooltip="{{critDamageTooltip}}" data-tooltip-class="iris-dmg-tooltip">{{critDamageTotal}}</div>
+    {{/if}}
     {{#if onSaveLabel}}<div class="iris-on-save">{{onSaveLabel}}</div>{{/if}}
   </section>
   {{/if}}
@@ -147,13 +216,11 @@
     {{#unless hideRetarget}}
     <button type="button" data-iris-action="retarget">{{localize "IRISROLLS.ChangeTargets"}}</button>
     {{/unless}}
+    {{#if hasTemplate}}
+    <button type="button" data-iris-action="clear-template" data-tooltip="{{localize 'IRISROLLS.RemoveTemplateHint'}}">{{localize "IRISROLLS.RemoveTemplate"}}</button>
+    <button type="button" data-iris-action="replace-template" data-tooltip="{{localize 'IRISROLLS.ReplaceTemplateHint'}}">{{localize "IRISROLLS.ReplaceTemplate"}}</button>
+    {{/if}}
   </div>
-  {{#if hasTemplate}}
-  <div class="iris-template-actions">
-    <button type="button" data-iris-action="clear-template" title="{{localize 'IRISROLLS.RemoveTemplateHint'}}">{{localize "IRISROLLS.RemoveTemplate"}}</button>
-    <button type="button" data-iris-action="replace-template" title="{{localize 'IRISROLLS.ReplaceTemplateHint'}}">{{localize "IRISROLLS.ReplaceTemplate"}}</button>
-  </div>
-  {{/if}}
   {{#if showLore}}
   <div class="iris-tools">
     <button type="button" class="iris-mini" data-iris-action="lore">{{localize "IRISROLLS.Description"}}</button>
@@ -165,6 +232,12 @@
   {{else if showUndo}}
   <div class="iris-tools">
     <button type="button" class="iris-mini" data-iris-action="undo">{{localize "IRISROLLS.Undo"}}</button>
+  </div>
+  {{/if}}
+  {{#if showAgain}}
+  <div class="iris-again">
+    <button type="button" data-iris-action="again" data-tooltip="{{localize 'IRISROLLS.AgainHint'}}">{{localize "IRISROLLS.Again"}}</button>
+    <button type="button" data-iris-action="again-free" data-tooltip="{{localize 'IRISROLLS.AgainFreeHint'}}">{{localize "IRISROLLS.AgainFree"}}</button>
   </div>
   {{/if}}
 </div>

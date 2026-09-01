@@ -11,6 +11,7 @@ function currentValue(doc, path) {
 }
 
 const DMG_SPELL_POINT_COSTS = { 0: 0, 1: 2, 2: 3, 3: 5, 4: 6, 5: 7, 6: 9, 7: 10, 8: 11, 9: 13 };
+const SPELL_POINTS_SOURCE_ID = "Compendium.dnd5e-spellpoints.module-items.Item.LUSjG8364p7LFY1u";
 
 function evalFormula(formula, actor) {
   if (formula == null || formula === "") return 0;
@@ -23,6 +24,32 @@ function evalFormula(formula, actor) {
   }
 }
 
+function spellPointsResourceLabel() {
+  try {
+    return game.settings.get("dnd5e-spellpoints", "settings")?.spResource || "Spell Points";
+  } catch {
+    return "Spell Points";
+  }
+}
+
+function isSpellPointsItem(item) {
+  if (!item) return false;
+  if (item.type !== "feat" && item.type !== "class") return false;
+  if (item.flags?.spellpoints) return true;
+  const sourceId = item.flags?.core?.sourceId || item._stats?.compendiumSource || "";
+  if (String(sourceId).includes("dnd5e-spellpoints") || sourceId === SPELL_POINTS_SOURCE_ID) return true;
+  const label = spellPointsResourceLabel();
+  const custom = item.system?.source?.custom;
+  if (custom && custom === label) return true;
+  const name = String(item.name ?? "").trim().toLowerCase();
+  const want = String(label).trim().toLowerCase();
+  return Boolean(name && (name === want || name.includes("spell point") || name.includes("spellpoint")));
+}
+
+function itemsOf(actor) {
+  return actor?.items ?? actor?.collections?.items ?? null;
+}
+
 export function getSpellPointsItem(actor) {
   if (!actor) return null;
   if (typeof globalThis.getSpellPointsItem === "function") {
@@ -31,13 +58,22 @@ export function getSpellPointsItem(actor) {
       if (found) return found;
     } catch { /* fall through */ }
   }
-  const flagId = actor.getFlag?.("dnd5espellpoints", "item") || actor.flags?.dnd5espellpoints?.item;
-  if (flagId && actor.items?.get(flagId)) return actor.items.get(flagId);
-  const label = game.settings.get("dnd5e-spellpoints", "settings")?.spResource || "Spell Points";
-  return actor.items?.find(item => {
-    if (item.type !== "feat" && item.type !== "class") return false;
-    return item.system?.source?.custom === label || item.name === label;
-  }) ?? null;
+  const items = itemsOf(actor);
+  if (!items) return null;
+  let flagId = actor.flags?.["dnd5e-spellpoints"]?.item || actor.flags?.dnd5espellpoints?.item;
+  if (!flagId) {
+    try {
+      if (game.modules.get("dnd5e-spellpoints")?.active) {
+        flagId = actor.getFlag("dnd5e-spellpoints", "item");
+      }
+    } catch { /* flag scope not registered */ }
+  }
+  if (flagId) {
+    const byId = items.get?.(flagId) ?? items[flagId];
+    if (byId) return byId;
+  }
+  const list = typeof items.filter === "function" ? items.filter(item => item) : [];
+  return list.find(isSpellPointsItem) ?? null;
 }
 
 export function actorUsesSpellPoints(actor) {
@@ -45,7 +81,12 @@ export function actorUsesSpellPoints(actor) {
 }
 
 function spellPointSettings(actor) {
-  const defaults = game.settings.get("dnd5e-spellpoints", "settings") ?? {};
+  let defaults = {};
+  try {
+    if (game.modules.get("dnd5e-spellpoints")?.active) {
+      defaults = game.settings.get("dnd5e-spellpoints", "settings") ?? {};
+    }
+  } catch { /* module not installed */ }
   const item = getSpellPointsItem(actor);
   if (item?.flags?.spellpoints?.override && item.flags.spellpoints.config) {
     return foundry.utils.mergeObject(defaults, item.flags.spellpoints.config, { inplace: false });
@@ -83,11 +124,17 @@ export function wouldConsumeSpellSlot(activity, usageConfig={}) {
 }
 
 export function shouldUseSpellPoints(activity, usageConfig={}) {
-  if (!activity?.actor || !getSpellPointsItem(activity.actor)) return false;
-  if (activity.item?.type !== "spell") return false;
-  const level = Number(activity.item?.system?.level) || 0;
-  if (level === 0) return spellPointCostForLevel(activity.actor, 0) > 0;
-  return wouldConsumeSpellSlot(activity, usageConfig) || Boolean(usageConfig.irisUseSpellPoints);
+  try {
+    const actor = activity?.actor ?? activity?.item?.actor ?? activity?.item?.parent;
+    if (!actor || !getSpellPointsItem(actor)) return false;
+    if (activity.item?.type !== "spell" && !activity.isSpell) return false;
+    if (usageConfig.consume === false) return false;
+    const level = Number(activity.item?.system?.level) || 0;
+    if (level === 0) return spellPointCostForLevel(actor, 0) > 0;
+    return Boolean(activity.requiresSpellSlot && activity.consumption?.spellSlot);
+  } catch {
+    return false;
+  }
 }
 
 export function castSlotKey(activity, usageConfig={}) {

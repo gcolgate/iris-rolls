@@ -1,8 +1,9 @@
-import { MODULE_ID, TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
-import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller } from "./targets.js";
+import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
+import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
-import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects } from "./card.js";
+import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel } from "./resources.js";
+import { shouldApplyReliableTalent } from "./features.js";
 
 function skipDialog(config={}, dialog={}, message={}) {
   dialog.configure = false;
@@ -36,37 +37,50 @@ async function cardFromD20({ kind, rolls, actor, title, subtitle, extra={} }) {
   const dual = await dualFromRoll(roll);
   const roller = describeActor(actor);
   const { activity, ...restExtra } = extra;
+  const targets = Array.isArray(state.repeatTargets)
+    ? await reviveRepeatTargets(state.repeatTargets, roller.uuid)
+    : resolveTargets(roller.uuid, { activity });
   const payload = {
     kind,
     mode: "normal",
     title,
     subtitle,
     roller,
-    targets: resolveTargets(roller.uuid, { activity }),
+    targets,
     d20: dual.d20,
     bonus: dual.bonus,
     situational: 0,
     critThreshold: 20,
     itemImg: restExtra.itemImg ?? actor?.img,
+    reliableTalent: shouldApplyReliableTalent(actor, { ...restExtra, kind }),
     ...restExtra
   };
+  if (kind === "attack") {
+    const activityDoc = extra.activity;
+    for (let i = 0; i < (payload.targets ?? []).length; i++) {
+      const target = payload.targets[i];
+      if (i === 0) {
+        target.d20 = dual.d20;
+        target.bonus = dual.bonus;
+        target.mode = "normal";
+        target.situational = 0;
+      } else if (activityDoc) {
+        await fillTargetAttack(target, activityDoc);
+      } else {
+        target.d20 = dual.d20;
+        target.bonus = dual.bonus;
+        target.mode = "normal";
+        target.situational = 0;
+      }
+    }
+    rememberTargets(payload);
+  }
   return postCard(payload, { actor, rolls: [roll] });
 }
 
 async function rollTargetSaves(activity, targets) {
   const dc = activity.save?.dc?.value ?? 0;
-  for (const target of targets) {
-    const actor = await fromUuid(target.uuid);
-    if (!actor) continue;
-    const ability = pickSaveAbility(activity, actor);
-    const rolls = await rollQuiet(actor, "rollSavingThrow", { ability, target: dc });
-    if (!rolls[0]) continue;
-    const dual = await dualFromRoll(rolls[0]);
-    target.saveD20 = dual.d20;
-    target.saveBonus = dual.bonus;
-    target.saveAbility = ability;
-    target.evasion = hasEvasion(actor);
-  }
+  for (const target of targets) await fillTargetSave(target, activity, dc);
   return dc;
 }
 
@@ -77,9 +91,21 @@ async function handleActivity(activity, usageConfig={}, results={}) {
   const title = item?.name ?? activity.name ?? localize("Title");
   const consumption = await finalizeConsumption(activity, usageConfig);
   const rolling = scaledActivity(item, activity.id, consumption.scaling) ?? activity;
-  const templateUuids = templateUuidsFromResults(results);
+  const repeat = usageConfig.irisRepeat || usageConfig.irisRepeatPlaceTemplate ? usageConfig : state.repeat;
+  if (repeat && state.repeat) state.repeat = null;
+  let templateUuids = templateUuidsFromResults(results);
   let targets;
-  if (templateUuids.length) {
+  if (repeat?.irisRepeatPlaceTemplate || repeat?.placeTemplate) {
+    templateUuids = liveTemplateUuids(repeat.irisRepeatTemplates ?? repeat.templates ?? templateUuids);
+    const tokens = await tokensInTemplates(templateUuids);
+    selectTokens(tokens);
+    targets = targetsFromTokens(tokens, roller.uuid);
+  } else if (repeat?.irisRepeat || repeat?.targets) {
+    templateUuids = liveTemplateUuids(repeat.irisRepeatTemplates ?? repeat.templates ?? []);
+    targets = await reviveRepeatTargets(repeat.irisRepeatTargets ?? repeat.targets ?? [], roller.uuid);
+    const tokenObjs = tokensFromTargets(targets);
+    if (tokenObjs.length) selectTokens(tokenObjs);
+  } else if (templateUuids.length) {
     const tokens = await tokensInTemplates(templateUuids);
     selectTokens(tokens);
     targets = targetsFromTokens(tokens, roller.uuid);
@@ -87,9 +113,10 @@ async function handleActivity(activity, usageConfig={}, results={}) {
     targets = resolveTargets(roller.uuid, { activity: rolling, scaling: consumption.scaling });
   }
   setRollerFromActor(actor);
-  const subtitle = [activity.name, consumption.spellPoints
+  const slotLabel = consumption.spellPoints
     ? slotLevelLabel(consumption.spellPoints.level)
-    : consumption.spellSlot?.label].filter(Boolean).join(" · ");
+    : consumption.spellSlot?.label || usageConfig.irisRepeatSlotLabel || repeat?.irisRepeatSlotLabel || repeat?.slotLabel || "";
+  const subtitle = [activity.name, slotLabel].filter(Boolean).join(" · ");
   const base = {
     title,
     subtitle,
@@ -109,19 +136,28 @@ async function handleActivity(activity, usageConfig={}, results={}) {
   state.activityDepth += 1;
   try {
     if (activity.type === "attack") {
-      const attackRolls = await rollQuiet(activity, "rollAttack");
-      if (!attackRolls[0]) return;
-      const dual = await dualFromRoll(attackRolls[0]);
+      const allRolls = [];
+      for (const target of targets) {
+        allRolls.push(...await fillTargetAttack(target, rolling));
+      }
+      if (!targets.length) {
+        const attackRolls = await rollQuiet(rolling, "rollAttack");
+        if (!attackRolls[0]) return;
+        allRolls.push(...attackRolls);
+        const dual = await dualFromRoll(attackRolls[0]);
+        base.d20 = dual.d20;
+        base.bonus = dual.bonus;
+      }
       const damage = await rollNormalAndCritDamage(rolling, { isCritical: false });
       const critDamage = await rollNormalAndCritDamage(rolling, { isCritical: true });
-      await postCard({
+      const payload = {
         ...base,
         kind: "attack",
-        d20: dual.d20,
-        bonus: dual.bonus,
         damage,
         critDamage
-      }, { actor, rolls: attackRolls });
+      };
+      rememberTargets(payload);
+      await postCard(payload, { actor, rolls: allRolls });
       return;
     }
 
@@ -129,7 +165,7 @@ async function handleActivity(activity, usageConfig={}, results={}) {
       const dc = await rollTargetSaves(activity, targets);
       const damage = await rollNormalAndCritDamage(rolling, { isCritical: false });
       const critDamage = await rollNormalAndCritDamage(rolling, { isCritical: false });
-      await postCard({
+      const payload = {
         ...base,
         kind: "save",
         dc,
@@ -137,7 +173,9 @@ async function handleActivity(activity, usageConfig={}, results={}) {
         saveAbilities: [...(activity.save?.ability ?? [])],
         damage,
         critDamage
-      }, { actor });
+      };
+      rememberTargets(payload);
+      await postCard(payload, { actor });
       return;
     }
 
@@ -188,7 +226,8 @@ async function handleActivity(activity, usageConfig={}, results={}) {
         bonus: dual.bonus,
         dc,
         skill,
-        ability
+        ability,
+        reliableTalent: shouldApplyReliableTalent(actor, { skill, tool, kind: skill ? "skill" : tool ? "tool" : "check" })
       }, { actor, rolls });
     }
   } finally {
@@ -198,7 +237,7 @@ async function handleActivity(activity, usageConfig={}, results={}) {
 
 Hooks.once("init", () => {
   const loader = foundry.applications?.handlebars?.loadTemplates ?? loadTemplates;
-  loader([TEMPLATE]);
+  loader([TEMPLATE, DIE_EDIT_TEMPLATE]);
 });
 
 Hooks.once("ready", () => {
@@ -210,6 +249,7 @@ Hooks.once("ready", () => {
   game.socket.on(`module.${MODULE_ID}`, handleSocket);
   bindCardListeners();
   wrapSpeakerForIrisRoller();
+  state.handleActivity = handleActivity;
 
   const bindSheet = app => bindSheetAsRoller(app);
   Hooks.on("renderActorSheet", bindSheet);
@@ -220,16 +260,21 @@ Hooks.once("ready", () => {
 
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig, dialogConfig, messageConfig) => {
     dialogConfig.configure = false;
+    if (usageConfig?.irisReaction) return;
     if (!HANDLED_ACTIVITIES.has(activity.type)) return;
     usageConfig.subsequentActions = false;
     messageConfig.create = false;
     usageConfig.irisRolls = true;
     if (shouldUseSpellPoints(activity, usageConfig)) {
-      usageConfig.consume ??= {};
-      usageConfig.consume.spellSlot = false;
-      usageConfig.consume.spellPoints = false;
+      if (usageConfig.consume === true || usageConfig.consume == null) {
+        usageConfig.consume = { spellSlot: false, spellPoints: true };
+      } else if (usageConfig.consume !== false) {
+        usageConfig.consume.spellSlot = false;
+        usageConfig.consume.spellPoints = true;
+      }
       usageConfig.irisUseSpellPoints = true;
-      const spItem = getSpellPointsItem(activity.actor);
+      usageConfig.spellPointsItem ??= getSpellPointsItem(activity.actor);
+      const spItem = usageConfig.spellPointsItem || getSpellPointsItem(activity.actor);
       const key = usageConfig.spell?.slot;
       const level = slotKeyLevel(activity.actor, key, activity.item);
       const cost = spellPointCostForLevel(activity.actor, level);
@@ -244,16 +289,16 @@ Hooks.once("ready", () => {
       }
     }
     usageConfig.irisSnapshot = snapshotConsumption(activity, usageConfig);
-    if (activity.target?.template?.type) {
+    if (usageConfig.irisRepeat) usageConfig.create = false;
+    else if (activity.target?.template?.type) {
       usageConfig.create ??= {};
       usageConfig.create.measuredTemplate = true;
     }
   });
 
   Hooks.on("dnd5e.preActivityConsumption", (activity, usageConfig) => {
-    if (!usageConfig?.irisUseSpellPoints || !usageConfig.consume) return;
+    if (!usageConfig?.irisUseSpellPoints || !usageConfig.consume || usageConfig.consume === true) return;
     usageConfig.consume.spellSlot = false;
-    usageConfig.consume.spellPoints = false;
   });
 
   Hooks.on("dnd5e.postUseActivity", (activity, usageConfig, results) => {

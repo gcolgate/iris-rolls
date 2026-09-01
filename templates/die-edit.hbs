@@ -1,0 +1,36 @@
+<div class="iris-die-form">
+  <p class="iris-die-current">{{localize "IRISROLLS.CurrentDie" face=face}}</p>
+  {{#if options.length}}
+  <div class="iris-die-opts">
+    {{#each options}}
+    <label class="iris-die-opt{{#if disabled}} is-disabled{{/if}}{{#if isGm}} is-gm{{/if}}">
+      <input type="radio" name="option" value="{{id}}" {{#if disabled}}disabled{{/if}}>
+      <span class="iris-die-opt-body">
+        <span class="iris-die-opt-name">{{name}}</span>
+        <span class="iris-die-opt-detail">{{detail}}</span>
+      </span>
+      {{#if usesLabel}}<span class="iris-die-opt-uses">{{usesLabel}}</span>{{/if}}
+      {{#if isPortent}}
+      <span class="iris-die-extra">
+        {{#if hasPortentValues}}
+        <select name="portentValue">
+          {{#each portentValues}}
+          <option value="{{this}}">{{this}}</option>
+          {{/each}}
+        </select>
+        {{/if}}
+        <input type="number" name="portentCustom" min="1" max="20" step="1" placeholder="{{localize 'IRISROLLS.PortentPlaceholder'}}">
+      </span>
+      {{/if}}
+      {{#if isDmSet}}
+      <span class="iris-die-extra">
+        <input type="number" name="dmSet" min="1" max="20" step="1" placeholder="1–20">
+      </span>
+      {{/if}}
+    </label>
+    {{/each}}
+  </div>
+  {{else}}
+  <p class="iris-muted">{{localize "IRISROLLS.NoDieFeatures"}}</p>
+  {{/if}}
+</div>

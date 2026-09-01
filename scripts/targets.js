@@ -24,6 +24,40 @@ function tokenId(token) {
   return token.document?.uuid || token.id;
 }
 
+export function actorFromTargetSync(target) {
+  if (!target) return null;
+  if (target.tokenUuid) {
+    try {
+      const token = fromUuidSync(target.tokenUuid);
+      if (token?.actor) return token.actor;
+    } catch {}
+  }
+  if (target.uuid) {
+    try {
+      const doc = fromUuidSync(target.uuid);
+      return doc?.actor ?? doc ?? null;
+    } catch {}
+  }
+  return null;
+}
+
+export async function actorFromTarget(target) {
+  if (!target) return null;
+  if (target.tokenUuid) {
+    try {
+      const token = await fromUuid(target.tokenUuid);
+      if (token?.actor) return token.actor;
+    } catch {}
+  }
+  if (target.uuid) {
+    try {
+      const doc = await fromUuid(target.uuid);
+      return doc?.actor ?? doc ?? null;
+    } catch {}
+  }
+  return null;
+}
+
 function readCountValue(...values) {
   for (const raw of values) {
     if (raw == null || raw === "") continue;
@@ -116,24 +150,19 @@ export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
     pool.push(token);
   }
 
-  const seenActor = new Set();
   const targets = [];
   for (const token of pool) {
     const actor = token.actor;
     if (!actor) continue;
     const isRoller = isSameActor(actor, rollerUuid);
     if (isRoller && area) continue;
-    const key = actor.uuid;
-    if (seenActor.has(key) || (isRoller && seenActor.has(rollerUuid))) continue;
-    seenActor.add(key);
-    if (isRoller) seenActor.add(rollerUuid);
     let sheetActor = actor;
     if (isRoller) {
       try { sheetActor = fromUuidSync(rollerUuid) ?? actor; } catch { sheetActor = actor; }
     }
     targets.push({
-      uuid: isRoller ? (sheetActor.uuid || rollerUuid) : actor.uuid,
-      tokenUuid: token.document?.uuid ?? "",
+      uuid: actor.uuid,
+      tokenUuid: token.document?.uuid ?? tokenId(token),
       name: token.name,
       img: token.document?.texture?.src || sheetActor.img || actor.img || "icons/svg/mystery-man.svg",
       ac: sheetActor.system?.attributes?.ac?.value ?? actor.system?.attributes?.ac?.value ?? null,
@@ -257,23 +286,22 @@ export async function tokensInTemplates(uuids=[]) {
 }
 
 export function targetsFromTokens(tokens=[], rollerUuid="") {
-  const seenActor = new Set();
+  const seenToken = new Set();
   const targets = [];
   for (const token of tokens) {
     const actor = token.actor;
     if (!actor) continue;
     const isRoller = isSameActor(actor, rollerUuid);
-    const key = actor.uuid;
-    if (seenActor.has(key) || (isRoller && seenActor.has(rollerUuid))) continue;
-    seenActor.add(key);
-    if (isRoller) seenActor.add(rollerUuid);
+    const id = tokenId(token);
+    if (!id || seenToken.has(id)) continue;
+    seenToken.add(id);
     let sheetActor = actor;
     if (isRoller) {
       try { sheetActor = fromUuidSync(rollerUuid) ?? actor; } catch { sheetActor = actor; }
     }
     targets.push({
-      uuid: isRoller ? (sheetActor.uuid || rollerUuid) : actor.uuid,
-      tokenUuid: token.document?.uuid ?? "",
+      uuid: actor.uuid,
+      tokenUuid: token.document?.uuid ?? id,
       name: token.name,
       img: token.document?.texture?.src || sheetActor.img || actor.img || "icons/svg/mystery-man.svg",
       ac: sheetActor.system?.attributes?.ac?.value ?? actor.system?.attributes?.ac?.value ?? null,
@@ -282,6 +310,58 @@ export function targetsFromTokens(tokens=[], rollerUuid="") {
     });
   }
   return targets;
+}
+
+export async function reviveRepeatTargets(stored=[], rollerUuid="") {
+  const out = [];
+  for (const t of stored ?? []) {
+    const actor = await actorFromTarget(t);
+    let tokenDoc = null;
+    if (t.tokenUuid) {
+      try { tokenDoc = await fromUuid(t.tokenUuid); } catch { tokenDoc = null; }
+    }
+    const token = tokenDoc?.object ?? null;
+    if (actor) {
+      const desc = describeActor(actor, token);
+      out.push({
+        uuid: actor.uuid,
+        tokenUuid: tokenDoc?.uuid ?? t.tokenUuid ?? "",
+        name: desc.name || t.name || actor.name,
+        img: desc.img || t.img || actor.img,
+        ac: actor.system?.attributes?.ac?.value ?? t.ac ?? null,
+        evasion: hasEvasion(actor),
+        isRoller: isSameActor(actor, rollerUuid)
+      });
+    } else if (t.uuid || t.tokenUuid) {
+      out.push({
+        uuid: t.uuid || "",
+        tokenUuid: t.tokenUuid || "",
+        name: t.name || "",
+        img: t.img || "icons/svg/mystery-man.svg",
+        ac: t.ac ?? null,
+        evasion: Boolean(t.evasion),
+        isRoller: Boolean(t.isRoller)
+      });
+    }
+  }
+  return out;
+}
+
+export function tokensFromTargets(targets=[]) {
+  const tokens = [];
+  const seen = new Set();
+  for (const t of targets ?? []) {
+    if (!t?.tokenUuid) continue;
+    try {
+      const doc = fromUuidSync(t.tokenUuid);
+      const token = doc?.object ?? canvas.tokens?.get(doc?.id);
+      const id = tokenId(token);
+      if (!token?.actor || !id || seen.has(id)) continue;
+      seen.add(id);
+      tokens.push(token);
+    } catch { /* token may be gone */ }
+  }
+  return tokens;
 }
 
 export function selectTokens(tokens=[]) {

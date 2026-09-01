@@ -1,10 +1,14 @@
 export const MODULE_ID = "iris-rolls";
 export const TEMPLATE = `modules/${MODULE_ID}/templates/roll-card.hbs`;
+export const DIE_EDIT_TEMPLATE = `modules/${MODULE_ID}/templates/die-edit.hbs`;
 
 export const state = {
   suppressCards: 0,
   activityDepth: 0,
-  rollerUuid: ""
+  rollerUuid: "",
+  repeatTargets: null,
+  repeat: null,
+  handleActivity: null
 };
 
 export const HANDLED_ACTIVITIES = new Set(["attack", "save", "damage", "heal", "check", "utility"]);
