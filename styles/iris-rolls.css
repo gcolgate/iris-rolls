@@ -20,16 +20,16 @@
 
 .iris-card header {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.45rem;
   align-items: center;
-  padding: 0.55rem 0.7rem;
+  padding: 0.35rem 0.55rem;
   background: linear-gradient(90deg, rgba(201, 162, 39, 0.22), transparent);
   border-bottom: 1px solid rgba(201, 162, 39, 0.28);
 }
 
 .iris-card header img {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid rgba(201, 162, 39, 0.5);
@@ -43,26 +43,26 @@
 
 .iris-card header h3 {
   margin: 0;
-  font-size: 1rem;
-  line-height: 1.2;
+  font-size: 0.88rem;
+  line-height: 1.15;
   border: none;
 }
 
 .iris-card header .iris-subtitle {
   color: var(--iris-muted);
-  font-size: 0.75rem;
+  font-size: 0.65rem;
 }
 
 .iris-parties {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.65rem 0.7rem 0.2rem;
+  gap: 0.3rem;
+  padding: 0.4rem 0.55rem 0.1rem;
 }
 
 .iris-party h4 {
-  margin: 0 0 0.35rem;
-  font-size: 0.7rem;
+  margin: 0 0 0.18rem;
+  font-size: 0.62rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--iris-muted);
@@ -78,8 +78,8 @@
 
 .iris-actor img,
 .iris-target img {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   object-fit: cover;
   border-radius: 50%;
   border: 1px solid rgba(244, 234, 208, 0.25);
@@ -92,21 +92,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
 }
 
 .iris-targets {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.28rem;
 }
 
 .iris-target {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.28rem;
-  padding-bottom: 0.5rem;
+  gap: 0.16rem;
+  padding-bottom: 0.32rem;
   border-bottom: 2px solid color-mix(in srgb, var(--iris-edge) 70%, transparent);
 }
 
@@ -124,33 +124,33 @@
 .iris-target-roll {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.35rem;
 }
 
 .iris-target-dice {
   justify-content: flex-start;
-  padding: 0.2rem 0 0.15rem;
-  gap: 0.55rem;
+  padding: 0.08rem 0 0.05rem;
+  gap: 0.35rem;
   flex: 1;
 }
 
 .iris-target-dice .iris-die {
-  width: 56px;
-  min-height: 56px;
+  width: 40px;
+  min-height: 40px;
 }
 
 .iris-target-dice .iris-face {
-  font-size: 1.45rem;
+  font-size: 1.05rem;
 }
 
 .iris-target-modes {
-  padding: 0 0 0.15rem;
+  padding: 0;
   width: 100%;
 }
 
 .iris-target-modes button {
-  font-size: 0.75rem;
-  padding: 0.28rem 0.2rem;
+  font-size: 0.62rem;
+  padding: 0.12rem 0.12rem;
 }
 
 .iris-dmg-mods {
@@ -195,8 +195,8 @@
   background: rgba(0, 0, 0, 0.28);
   color: var(--iris-text);
   border-radius: 6px;
-  padding: 0.22rem 0.08rem;
-  font-size: 0.7rem;
+  padding: 0.1rem 0.06rem;
+  font-size: 0.62rem;
 }
 
 .iris-mult button.active {
@@ -213,8 +213,8 @@
 }
 
 .iris-target-bonus input[type="number"] {
-  width: 3.6rem;
-  height: 1.6rem;
+  width: 3.1rem;
+  height: 1.35rem;
 }
 
 .iris-target-main {
@@ -226,7 +226,7 @@
 
 .iris-save-detail,
 .iris-attack-detail {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   color: var(--iris-muted);
 }
 
@@ -264,7 +264,7 @@
 }
 
 .iris-applied {
-  font-size: 0.75rem;
+  font-size: 0.65rem;
   font-weight: 700;
   white-space: nowrap;
   color: var(--iris-text);
@@ -277,12 +277,12 @@
 }
 
 .iris-outcome {
-  margin-left: 0.25rem;
-  font-size: 0.7rem;
+  margin-left: 0.2rem;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  padding: 0.1rem 0.35rem;
+  padding: 0.05rem 0.28rem;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -345,25 +345,25 @@
 
 .iris-muted {
   color: var(--iris-muted);
-  font-size: 0.8rem;
+  font-size: 0.68rem;
 }
 
 .iris-dice {
   display: flex;
   justify-content: center;
   align-items: stretch;
-  gap: 0.75rem;
-  padding: 0.7rem;
+  gap: 0.4rem;
+  padding: 0.35rem 0.55rem 0.25rem;
 }
 
 .iris-die {
-  width: 64px;
-  min-height: 64px;
+  width: 44px;
+  min-height: 44px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #1e1a16;
   border: 2px solid #5c5346;
   color: var(--iris-text);
@@ -389,16 +389,16 @@
 }
 
 .iris-die .iris-face {
-  font-size: 1.7rem;
+  font-size: 1.2rem;
   font-weight: 700;
   line-height: 1;
 }
 
 .iris-die .iris-die-label {
-  font-size: 0.62rem;
+  font-size: 0.52rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-top: 0.15rem;
+  margin-top: 0.08rem;
   color: var(--iris-muted);
 }
 
@@ -426,36 +426,41 @@ button.iris-die {
 
 .iris-rt {
   text-align: center;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   color: var(--iris-edge);
-  padding: 0 0.7rem 0.35rem;
+  padding: 0 0.55rem 0.2rem;
 }
 
 .iris-total-wrap {
   text-align: center;
-  padding: 0 0.7rem 0.55rem;
+  padding: 0 0.55rem 0.3rem;
 }
 
 .iris-total {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 700;
 }
 
 .iris-total .iris-vs {
   color: var(--iris-muted);
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.75rem;
 }
 
 .iris-modes {
   display: flex;
-  gap: 0.3rem;
-  padding: 0 0.7rem 0.55rem;
+  gap: 0.22rem;
+  padding: 0 0.55rem 0.3rem;
 }
 
+#chat-log .iris-card button,
+.chat-log .iris-card button,
 .iris-card button {
   cursor: pointer;
   font-family: inherit;
+  height: auto;
+  min-height: 0;
+  line-height: 1.2;
 }
 
 .iris-modes button,
@@ -464,9 +469,9 @@ button.iris-die {
   border: 1px solid rgba(201, 162, 39, 0.35);
   background: rgba(0, 0, 0, 0.28);
   color: var(--iris-text);
-  border-radius: 6px;
-  padding: 0.28rem 0.2rem;
-  font-size: 0.75rem;
+  border-radius: 5px;
+  padding: 0.12rem 0.15rem;
+  font-size: 0.62rem;
 }
 
 .iris-modes button.active {
@@ -479,30 +484,32 @@ button.iris-die {
 .iris-bonus {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0 0.7rem 0.65rem;
-  font-size: 0.8rem;
+  gap: 0.3rem;
+  padding: 0 0.55rem 0.35rem;
+  font-size: 0.68rem;
   color: var(--iris-muted);
 }
 
 .iris-bonus input[type="number"] {
-  width: 4.2rem;
-  height: 1.6rem;
+  width: 3.4rem;
+  height: 1.35rem;
+  min-height: 0;
   background: rgba(0, 0, 0, 0.35);
   color: var(--iris-text);
   border: 1px solid rgba(201, 162, 39, 0.3);
   border-radius: 4px;
   text-align: center;
+  font-size: 0.68rem;
 }
 
 .iris-damage {
   border-top: 1px solid rgba(201, 162, 39, 0.22);
-  padding: 0.55rem 0.7rem;
+  padding: 0.3rem 0.55rem;
 }
 
 .iris-damage h4 {
-  margin: 0 0 0.35rem;
-  font-size: 0.75rem;
+  margin: 0 0 0.18rem;
+  font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--iris-muted);
@@ -517,14 +524,14 @@ button.iris-die {
 .iris-dmg-line {
   display: flex;
   justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  margin-bottom: 0.2rem;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  margin-bottom: 0.08rem;
   cursor: help;
 }
 
 .iris-dmg-bonus {
-  padding: 0.35rem 0 0.2rem;
+  padding: 0.18rem 0 0.08rem;
   justify-content: flex-end;
 }
 
@@ -533,13 +540,13 @@ button.iris-die {
 }
 
 .iris-on-save {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   color: var(--iris-muted);
 }
 
 .iris-effect-line {
-  padding: 0.15rem 0.7rem 0.35rem;
-  font-size: 0.78rem;
+  padding: 0.08rem 0.55rem 0.2rem;
+  font-size: 0.68rem;
   color: var(--iris-muted);
 }
 
@@ -547,20 +554,20 @@ button.iris-die {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.15rem 0.7rem 0.7rem;
+  gap: 0.25rem;
+  padding: 0.08rem 0.55rem 0.4rem;
 }
 
 .iris-actions:has(+ .iris-template-actions) {
-  padding-bottom: 0.35rem;
+  padding-bottom: 0.2rem;
 }
 
 .iris-template-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem 0.55rem;
+  gap: 0.25rem;
+  padding: 0 0.55rem 0.35rem;
 }
 
 .iris-template-actions button {
@@ -568,9 +575,9 @@ button.iris-die {
   border: 1px solid rgba(201, 162, 39, 0.35);
   background: rgba(0, 0, 0, 0.28);
   color: var(--iris-text);
-  border-radius: 6px;
-  padding: 0.28rem 0.2rem;
-  font-size: 0.75rem;
+  border-radius: 5px;
+  padding: 0.12rem 0.15rem;
+  font-size: 0.62rem;
 }
 
 .iris-card [data-iris-action="clear-template"] ~ [data-iris-action="clear-template"],
@@ -595,21 +602,21 @@ button.iris-die {
 .iris-consume {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem 0.45rem;
-  font-size: 0.72rem;
+  gap: 0.3rem;
+  padding: 0 0.55rem 0.25rem;
+  font-size: 0.62rem;
   color: var(--iris-muted);
 }
 
 .iris-slot select {
-  height: 1.45rem;
+  height: 1.3rem;
   max-width: 9.5rem;
   background: rgba(0, 0, 0, 0.35);
   color: var(--iris-text);
   border: 1px solid rgba(201, 162, 39, 0.3);
   border-radius: 4px;
-  font-size: 0.72rem;
-  padding: 0 0.25rem;
+  font-size: 0.62rem;
+  padding: 0 0.2rem;
 }
 
 .iris-consume {
@@ -622,9 +629,9 @@ button.iris-die {
   border: none;
   box-shadow: none;
   color: var(--iris-muted);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   letter-spacing: 0.02em;
-  padding: 0.1rem 0.28rem;
+  padding: 0.05rem 0.2rem;
   margin: 0;
   min-height: 0;
   min-width: 0;
@@ -646,18 +653,18 @@ button.iris-die {
 .chat-log .iris-card button.iris-react,
 .iris-card button.iris-react {
   appearance: none;
-  margin-left: 0.3rem;
+  margin-left: 0.2rem;
   flex: 0 0 auto;
   width: auto;
-  min-width: 4.1rem;
-  min-height: 1.65rem;
+  min-width: 3.2rem;
+  min-height: 1.3rem;
   height: auto;
-  padding: 0.22rem 0.6rem;
+  padding: 0.1rem 0.4rem;
   border: 1px solid #f0d36a;
-  border-radius: 5px;
+  border-radius: 4px;
   background: linear-gradient(#edd25a, #c9a227);
   color: #1b1404;
-  font-size: 0.72rem;
+  font-size: 0.58rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -679,8 +686,8 @@ button.iris-die {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem 0.5rem;
+  gap: 0.3rem;
+  padding: 0 0.55rem 0.28rem;
 }
 
 .iris-tools .iris-mini[data-iris-action="undo"] {
@@ -691,8 +698,8 @@ button.iris-die {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.7rem 0.7rem;
+  gap: 0.25rem;
+  padding: 0 0.55rem 0.4rem;
 }
 
 .iris-again button {
@@ -700,9 +707,9 @@ button.iris-die {
   border: 1px solid rgba(201, 162, 39, 0.35);
   background: rgba(0, 0, 0, 0.28);
   color: var(--iris-text);
-  border-radius: 6px;
-  padding: 0.28rem 0.35rem;
-  font-size: 0.75rem;
+  border-radius: 5px;
+  padding: 0.12rem 0.25rem;
+  font-size: 0.62rem;
   cursor: pointer;
 }
 
@@ -718,9 +725,9 @@ button.iris-die {
 }
 
 .iris-lore {
-  margin: 0 0.7rem 0.55rem;
-  padding: 0.45rem 0.55rem;
-  font-size: 0.78rem;
+  margin: 0 0.55rem 0.35rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.68rem;
   line-height: 1.4;
   color: var(--iris-text);
   background: rgba(0, 0, 0, 0.28);
@@ -740,14 +747,14 @@ button.iris-die {
 
 .iris-undo-note {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
 }
 
 .iris-conc-result {
   text-align: center;
   font-weight: 700;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.7rem 0.15rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.55rem 0.08rem;
 }
 
 .iris-conc-result.success {
