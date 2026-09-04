@@ -4,6 +4,7 @@ import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel } from "./resources.js";
 import { shouldApplyReliableTalent } from "./features.js";
+import { enablePlayerTokenSelect } from "./select.js";
 
 function skipDialog(config={}, dialog={}, message={}) {
   dialog.configure = false;
@@ -238,6 +239,10 @@ async function handleActivity(activity, usageConfig={}, results={}) {
 Hooks.once("init", () => {
   const loader = foundry.applications?.handlebars?.loadTemplates ?? loadTemplates;
   loader([TEMPLATE, DIE_EDIT_TEMPLATE]);
+});
+
+Hooks.once("setup", () => {
+  enablePlayerTokenSelect();
 });
 
 Hooks.once("ready", () => {
