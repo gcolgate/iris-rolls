@@ -26,8 +26,16 @@
             <img src="{{img}}" alt="{{name}}">
             <div class="iris-target-main">
               <span class="iris-name">{{name}}</span>
-              {{#if attackDetail}}<span class="iris-attack-detail">{{attackDetail}}</span>{{/if}}
-              {{#if saveDetail}}<span class="iris-save-detail">{{saveDetail}}</span>{{/if}}
+              {{#if attackDetail}}
+              <span class="iris-roll-sum iris-attack-detail">
+                <strong>{{rollTotal}}</strong><span class="iris-vs"> {{versusLabel}}</span>
+              </span>
+              {{/if}}
+              {{#if saveDetail}}
+              <span class="iris-roll-sum iris-save-detail">
+                <strong>{{rollTotal}}</strong><span class="iris-vs"> {{versusLabel}}</span>
+              </span>
+              {{/if}}
               {{#if tags.length}}
               <span class="iris-tags">
                 {{#each tags}}<span class="iris-tag {{css}}">{{label}}</span>{{/each}}
@@ -50,14 +58,12 @@
             <div class="iris-dice iris-target-dice">
               {{#each targetDice}}
               {{#if clickable}}
-              <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-target-uuid="{{../targetKey}}" title="{{localize 'IRISROLLS.AdjustDieHint'}}">
+              <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-target-uuid="{{../targetKey}}" title="{{title}}">
                 <span class="iris-face">{{value}}</span>
-                <span class="iris-die-label">{{label}}</span>
               </button>
               {{else}}
-              <div class="iris-die {{css}}">
+              <div class="iris-die {{css}}" title="{{title}}">
                 <span class="iris-face">{{value}}</span>
-                <span class="iris-die-label">{{label}}</span>
               </div>
               {{/if}}
               {{/each}}
@@ -79,6 +85,9 @@
             {{#each damageMods}}
             <div class="iris-dmg-mod">
               <span class="iris-dmg-mod-label" title="{{typeLabel}}">{{typeLabel}}</span>
+              {{#each traits}}
+              <span class="iris-dmg-trait {{css}}">{{label}}</span>
+              {{/each}}
               <div class="iris-mult">
                 {{#each choices}}
                 <button type="button" data-iris-action="mult" data-target-uuid="{{../targetKey}}" data-iris-type="{{../typeKey}}" data-iris-mult="{{value}}" class="{{#if selected}}active{{/if}}">{{label}}</button>
@@ -102,14 +111,12 @@
   <div class="iris-dice">
     {{#each dice}}
     {{#if clickable}}
-    <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" title="{{localize 'IRISROLLS.AdjustDieHint'}}">
+    <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" title="{{title}}">
       <span class="iris-face">{{value}}</span>
-      <span class="iris-die-label">{{label}}</span>
     </button>
     {{else}}
-    <div class="iris-die {{css}}">
+    <div class="iris-die {{css}}" title="{{title}}">
       <span class="iris-face">{{value}}</span>
-      <span class="iris-die-label">{{label}}</span>
     </div>
     {{/if}}
     {{/each}}
@@ -118,9 +125,9 @@
   <div class="iris-rt">{{localize "IRISROLLS.ReliableTalent"}}</div>
   {{/if}}
   <div class="iris-total-wrap">
-    <div class="iris-total">
-      {{localize "IRISROLLS.Total"}} {{displayTotal}}
-      {{#if versus}}<span class="iris-vs">{{versus}}</span>{{/if}}
+    <div class="iris-total iris-roll-sum">
+      <strong>{{displayTotal}}</strong>
+      {{#if versus}}<span class="iris-vs"> {{versus}}</span>{{/if}}
     </div>
   </div>
   {{/if}}

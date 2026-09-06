@@ -62,6 +62,30 @@ function takingDamage(payload, target) {
   return payload.kind === "damage";
 }
 
+function hasShieldEffect(actor) {
+  if (actor?.statuses?.has?.("shield") || actor?.statuses?.has?.("effectShield")) return true;
+  const effects = [...(actor?.appliedEffects ?? actor?.effects ?? [])];
+  return effects.some(effect => {
+    if (!effect || effect.disabled || effect.isSuppressed) return false;
+    const statuses = effect.statuses;
+    if (statuses?.has?.("shield") || statuses?.has?.("effectShield")) return true;
+    const ident = String(effect.system?.identifier ?? effect.identifier ?? "").toLowerCase();
+    if (ident === "shield" || ident === "effectshield") return true;
+    if (String(effect.name ?? "").toLowerCase().trim() === "shield") return true;
+    const uuid = effect.origin;
+    if (!uuid) return false;
+    try {
+      const doc = fromUuidSync(uuid);
+      const item = doc?.documentName === "Item" ? doc : (doc?.item ?? null);
+      const itemIdent = String(item?.system?.identifier || "").toLowerCase();
+      const itemName = String(item?.name || "").toLowerCase().trim();
+      return itemIdent === "shield" || itemName === "shield";
+    } catch {
+      return false;
+    }
+  });
+}
+
 function usedSet(target) {
   return new Set(target.reactionsUsed ?? []);
 }
@@ -105,7 +129,7 @@ export function listTargetReactions(payload, target, actor) {
 
   if (hit) {
     const shield = findSpell(actor, { identifiers: ["shield"], names: ["shield"] });
-    if (shield) push(reactionOption("shield", shield, actor, localize("ReactShield")));
+    if (shield && !hasShieldEffect(actor)) push(reactionOption("shield", shield, actor, localize("ReactShield")));
     const duelist = findFeat(actor, {
       identifiers: ["defensive-duelist"],
       names: ["defensive duelist"]

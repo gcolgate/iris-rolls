@@ -135,12 +135,13 @@
 }
 
 .iris-target-dice .iris-die {
-  width: 40px;
-  min-height: 40px;
+  width: 28px;
+  height: 32px;
+  min-height: 32px;
 }
 
 .iris-target-dice .iris-face {
-  font-size: 1.05rem;
+  font-size: 0.92rem;
 }
 
 .iris-target-modes {
@@ -169,9 +170,9 @@
 }
 
 .iris-dmg-mod-label {
-  flex: 0 1 6.2rem;
-  min-width: 3.4rem;
-  max-width: 38%;
+  flex: 0 1 5.4rem;
+  min-width: 3.2rem;
+  max-width: 32%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -179,6 +180,33 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--iris-muted);
+}
+
+.iris-dmg-trait {
+  flex: 0 0 auto;
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  padding: 0.08rem 0.22rem;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.iris-dmg-trait.immune {
+  color: #d4d4d4;
+  background: rgba(74, 74, 74, 0.45);
+}
+
+.iris-dmg-trait.resist {
+  color: #9ec3f0;
+  background: rgba(44, 77, 122, 0.45);
+}
+
+.iris-dmg-trait.vuln {
+  color: #f0b4b4;
+  background: rgba(106, 48, 48, 0.45);
 }
 
 .iris-mult {
@@ -225,9 +253,23 @@
 }
 
 .iris-save-detail,
-.iris-attack-detail {
-  font-size: 0.62rem;
+.iris-attack-detail,
+.iris-roll-sum {
+  font-size: 0.92rem;
+  line-height: 1.25;
+  color: var(--iris-text);
+}
+
+.iris-roll-sum strong {
+  font-weight: 800;
+  font-size: 1.12rem;
+  line-height: 1.15;
+}
+
+.iris-roll-sum .iris-vs {
   color: var(--iris-muted);
+  font-weight: 500;
+  font-size: 0.82rem;
 }
 
 .iris-tags {
@@ -352,26 +394,41 @@
   display: flex;
   justify-content: center;
   align-items: stretch;
-  gap: 0.4rem;
-  padding: 0.35rem 0.55rem 0.25rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.55rem 0.2rem;
 }
 
 .iris-die {
-  width: 44px;
-  min-height: 44px;
+  --iris-die-edge: #5c5346;
+  position: relative;
+  width: 28px;
+  height: 32px;
+  min-height: 32px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
-  background: #1e1a16;
-  border: 2px solid #5c5346;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--iris-text);
 }
 
+.iris-die::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #1e1a16;
+  clip-path: polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%);
+  filter: drop-shadow(0 0 0.6px var(--iris-die-edge)) drop-shadow(0 0 0.6px var(--iris-die-edge));
+}
+
 .iris-die.used {
-  border-color: var(--iris-edge);
-  box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.4), 0 0 12px rgba(201, 162, 39, 0.2);
+  --iris-die-edge: var(--iris-edge);
+}
+
+.iris-die.used::before {
+  filter: drop-shadow(0 0 0.7px var(--iris-die-edge)) drop-shadow(0 0 0.7px var(--iris-die-edge)) drop-shadow(0 0 6px rgba(201, 162, 39, 0.35));
 }
 
 .iris-die.unused {
@@ -379,49 +436,49 @@
 }
 
 .iris-die.crit {
-  border-color: var(--iris-crit);
+  --iris-die-edge: var(--iris-crit);
   color: var(--iris-crit);
 }
 
 .iris-die.fumble {
-  border-color: var(--iris-bad);
+  --iris-die-edge: var(--iris-bad);
   color: var(--iris-bad);
 }
 
 .iris-die .iris-face {
-  font-size: 1.2rem;
+  position: relative;
+  z-index: 1;
+  font-size: 0.95rem;
   font-weight: 700;
   line-height: 1;
 }
 
-.iris-die .iris-die-label {
-  font-size: 0.52rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-top: 0.08rem;
-  color: var(--iris-muted);
-}
-
-button.iris-die {
+#chat-log .iris-card button.iris-die,
+.chat-log .iris-card button.iris-die,
+.iris-card button.iris-die {
   appearance: none;
   padding: 0;
   margin: 0;
   color: inherit;
   font: inherit;
   line-height: inherit;
+  width: 28px;
+  height: 32px;
+  min-width: 28px;
+  min-height: 32px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .iris-die.iris-die-edit {
   cursor: pointer;
 }
 
-.iris-die.iris-die-edit:hover,
-.iris-die.iris-die-edit:focus-visible {
-  box-shadow: 0 0 0 2px var(--iris-edge), 0 0 12px rgba(201, 162, 39, 0.35);
-}
-
-.iris-die.floored .iris-die-label {
-  color: var(--iris-edge);
+.iris-die.iris-die-edit:hover::before,
+.iris-die.iris-die-edit:focus-visible::before {
+  filter: drop-shadow(0 0 1px var(--iris-edge)) drop-shadow(0 0 1px var(--iris-edge)) drop-shadow(0 0 8px rgba(201, 162, 39, 0.45));
 }
 
 .iris-rt {
@@ -433,18 +490,23 @@ button.iris-die {
 
 .iris-total-wrap {
   text-align: center;
-  padding: 0 0.55rem 0.3rem;
+  padding: 0.1rem 0.55rem 0.35rem;
 }
 
 .iris-total {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.25;
+}
+
+.iris-total strong {
+  font-weight: 800;
+  font-size: 1.12rem;
 }
 
 .iris-total .iris-vs {
   color: var(--iris-muted);
   font-weight: 500;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
 }
 
 .iris-modes {

@@ -460,7 +460,7 @@ function miniDice(values=[], mode="normal", { critThreshold=20, minFace=0, click
         isUsed && shown >= critThreshold ? "crit" : "",
         isUsed && shown === 1 ? "fumble" : ""
       ].filter(Boolean).join(" "),
-      label: floored ? localize("ReliableTalent") : isUsed ? localize("UsedDie") : localize("UnusedDie")
+      title: floored ? localize("ReliableTalent") : clickable && isUsed ? localize("AdjustDieHint") : ""
     };
   });
 }
@@ -553,6 +553,11 @@ export function viewModel(payload) {
         targetKey: t.tokenUuid || t.uuid,
         total: line.total,
         taken: line.taken,
+        traits: [
+          line.immune ? { label: localize("ModImmune"), css: "immune" } : null,
+          !line.immune && line.resistant ? { label: localize("ModResist"), css: "resist" } : null,
+          line.vulnerable ? { label: localize("ModVulnerable"), css: "vuln" } : null
+        ].filter(Boolean),
         choices: [
           { value: 0, label: "0" },
           { value: 0.25, label: "1/4" },
@@ -568,17 +573,22 @@ export function viewModel(payload) {
       const reactions = ["attack", "save", "damage"].includes(payload.kind)
         ? listTargetReactions(payload, t, actor)
         : [];
+      const attackAc = (Number(t.ac) || 0) + (Number(t.acBonus) || 0);
+      const hasAttackSum = payload.kind === "attack" && t.displayTotal != null && t.ac != null;
+      const hasSaveSum = isSave && t.saveTotal != null;
       return {
         ...t,
         outcomeLabel: outcomeCopy(t.outcome, { isSave }),
         outcomeClass: t.outcome ?? "",
         targetDice,
-        attackDetail: payload.kind === "attack" && t.displayTotal != null && t.ac != null
-          ? localize("AttackVs", { total: t.displayTotal, ac: (Number(t.ac) || 0) + (Number(t.acBonus) || 0) })
-          : "",
-        saveDetail: isSave && t.saveTotal != null
-          ? localize("SaveVs", { total: t.saveTotal, dc: payload.dc ?? 0 })
-          : "",
+        attackDetail: hasAttackSum,
+        saveDetail: hasSaveSum,
+        rollTotal: hasSaveSum ? t.saveTotal : t.displayTotal,
+        versusLabel: hasAttackSum
+          ? localize("Versus", { value: localize("AC", { ac: attackAc }) })
+          : hasSaveSum
+            ? localize("Versus", { value: localize("DC", { dc: payload.dc ?? 0 }) })
+            : "",
         targetKey: t.tokenUuid || t.uuid,
         showTargetModes,
         modeNormal: isSave ? saveMode === "normal" : attackMode === "normal",
@@ -614,7 +624,7 @@ export function viewModel(payload) {
         index: i,
         clickable: used,
         css,
-        label: floored ? localize("ReliableTalent") : used ? localize("UsedDie") : localize("UnusedDie")
+        title: floored ? localize("ReliableTalent") : used ? localize("AdjustDieHint") : ""
       };
     }),
     displayTotal: payload.displayTotal,
@@ -922,8 +932,6 @@ export async function applyCardDamage(message, actionEl=null) {
         deltaValue,
         deltaTemp
       });
-      const key = payload.kind === "heal" ? "HealingApplied" : "DamageApplied";
-      ui.notifications.info(localize(key, { amount, name: actor.name }));
       applied += 1;
     } catch (err) {
       console.error(`${MODULE_ID} | apply damage`, err);
@@ -1013,7 +1021,6 @@ export async function applyCardEffects(message) {
           effectName: effect.name
         });
       }
-      ui.notifications.info(localize("EffectApplied", { name: actor.name }));
       applied += 1;
     } catch (err) {
       console.error(`${MODULE_ID} | apply effect`, err);
@@ -1049,7 +1056,6 @@ export async function retarget(message, activity=null, { tokens=null, extra={} }
   rememberTargets(payload);
 
   await refreshMessage(message, payload);
-  ui.notifications.info(localize("TargetsUpdated"));
 }
 
 function messageFromElement(el) {
@@ -1848,11 +1854,16 @@ export function onChatBonusInput(event) {
     const row = input.closest(".iris-target");
     if (!row) return;
     const detail = payload.kind === "save"
-      ? (target.saveTotal != null ? localize("SaveVs", { total: target.saveTotal, dc: payload.dc ?? 0 }) : "")
+      ? (target.saveTotal != null
+        ? { total: target.saveTotal, versus: localize("Versus", { value: localize("DC", { dc: payload.dc ?? 0 }) }) }
+        : null)
       : (target.displayTotal != null && target.ac != null
-        ? localize("AttackVs", { total: target.displayTotal, ac: target.ac }) : "");
+        ? { total: target.displayTotal, versus: localize("Versus", { value: localize("AC", { ac: (Number(target.ac) || 0) + (Number(target.acBonus) || 0) }) }) }
+        : null);
     const detailEl = row.querySelector(".iris-save-detail, .iris-attack-detail");
-    if (detailEl) detailEl.textContent = detail;
+    if (detailEl && detail) {
+      detailEl.innerHTML = `<strong>${detail.total}</strong><span class="iris-vs"> ${foundry.utils.escapeHTML(detail.versus)}</span>`;
+    }
     const outcomeEl = row.querySelector(".iris-outcome");
     if (outcomeEl && target.outcome) {
       outcomeEl.textContent = outcomeCopy(target.outcome, { isSave: payload.kind === "save" });
@@ -1868,7 +1879,7 @@ export function onChatBonusInput(event) {
   if (!totalEl) return;
   const vs = totalEl.querySelector(".iris-vs");
   const vsHtml = vs ? ` ${vs.outerHTML}` : "";
-  totalEl.innerHTML = `${localize("Total")} ${payload.displayTotal}${vsHtml}`;
+  totalEl.innerHTML = `<strong>${payload.displayTotal}</strong>${vsHtml}`;
 }
 
 export function bindCardListeners() {

@@ -23,12 +23,14 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
-## What's new in 1.1.1
+## What's new in 1.1.2
 
-- Players can left-click or box-select tokens they do not own to pick Iris Rolls targets. That is select-only: it does not let them move the token, open its sheet, or change HP.
-- Area templates now keep those unowned tokens selected, so Change Targets still works after a Fireball.
+- Chat cards are more compact: smaller hex dice, tighter buttons, and a larger roll total vs AC/DC.
+- Damage rows show Immune / Resist / Vulnerable next to the type.
+- Shield no longer offers React if the target already has Shield up.
+- Changing targets or applying damage no longer posts a blue confirmation toast.
 
-See the [1.1.1 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1). Older notes: [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.2 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2). Older notes: [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
