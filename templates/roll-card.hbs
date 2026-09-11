@@ -55,14 +55,14 @@
           {{#if showTargetModes}}
           <div class="iris-target-roll">
             {{#if targetDice}}
-            <div class="iris-dice iris-target-dice">
+            <div class="iris-dice iris-target-dice" data-roll-bonus="{{rollBonus}}">
               {{#each targetDice}}
               {{#if clickable}}
-              <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-target-uuid="{{../targetKey}}" title="{{title}}">
+              <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-target-uuid="{{../targetKey}}" data-die-face="{{face}}" data-tooltip="{{title}}" data-tooltip-class="iris-dmg-tooltip">
                 <span class="iris-face">{{value}}</span>
               </button>
               {{else}}
-              <div class="iris-die {{css}}" title="{{title}}">
+              <div class="iris-die {{css}}" data-die-face="{{face}}" data-tooltip="{{title}}" data-tooltip-class="iris-dmg-tooltip">
                 <span class="iris-face">{{value}}</span>
               </div>
               {{/if}}
@@ -108,14 +108,14 @@
   </div>
 
   {{#if hasD20}}
-  <div class="iris-dice">
+  <div class="iris-dice" data-roll-bonus="{{rollBonus}}">
     {{#each dice}}
     {{#if clickable}}
-    <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" title="{{title}}">
+    <button type="button" class="iris-die {{css}}" data-iris-action="die" data-die-index="{{index}}" data-die-face="{{face}}" data-tooltip="{{title}}" data-tooltip-class="iris-dmg-tooltip">
       <span class="iris-face">{{value}}</span>
     </button>
     {{else}}
-    <div class="iris-die {{css}}" title="{{title}}">
+    <div class="iris-die {{css}}" data-die-face="{{face}}" data-tooltip="{{title}}" data-tooltip-class="iris-dmg-tooltip">
       <span class="iris-face">{{value}}</span>
     </div>
     {{/if}}
@@ -185,7 +185,10 @@
       <span>{{localize "IRISROLLS.BonusDamage"}}</span>
       <input type="number" name="damageBonus" value="{{damageBonus}}" step="1">
     </label>
-    <div class="iris-dmg-total" data-base-total="{{damageBase}}" data-tooltip="{{damageTooltip}}" data-tooltip-class="iris-dmg-tooltip">{{damageTotal}}</div>
+    <div class="iris-dmg-total{{#if damageApplied}} is-applied{{/if}}"{{#if hasApply}}{{#unless damageApplied}} data-iris-action="apply"{{/unless}}{{/if}} data-base-total="{{damageBase}}" data-tooltip="{{damageTooltip}}" data-tooltip-class="iris-dmg-tooltip">
+      <span class="iris-dmg-total-label">{{totalDamageLabel}}</span>
+      <span class="iris-dmg-total-value">{{damageTotal}}</span>
+    </div>
     {{#if critDamageLines.length}}
     <h4>{{localize "IRISROLLS.CriticalDamage"}}</h4>
     {{#each critDamageLines}}
@@ -194,7 +197,10 @@
       <span>{{total}}</span>
     </div>
     {{/each}}
-    <div class="iris-dmg-total" data-tooltip="{{critDamageTooltip}}" data-tooltip-class="iris-dmg-tooltip">{{critDamageTotal}}</div>
+    <div class="iris-dmg-total{{#if damageApplied}} is-applied{{/if}}"{{#if hasApply}}{{#unless damageApplied}} data-iris-action="apply"{{/unless}}{{/if}} data-tooltip="{{critDamageTooltip}}" data-tooltip-class="iris-dmg-tooltip">
+      <span class="iris-dmg-total-label">{{totalDamageLabel}}</span>
+      <span class="iris-dmg-total-value">{{critDamageTotal}}</span>
+    </div>
     {{/if}}
     {{#if onSaveLabel}}<div class="iris-on-save">{{onSaveLabel}}</div>{{/if}}
   </section>

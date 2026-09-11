@@ -1,0 +1,15 @@
+<div class="iris-slot-pick">
+  <header class="iris-slot-pick-head">
+    <img src="{{img}}" alt="" class="iris-slot-pick-img">
+    <h3 class="iris-slot-pick-name">{{name}}</h3>
+  </header>
+  <div class="iris-lore iris-slot-pick-desc">{{{description}}}</div>
+  <label class="iris-slot iris-slot-pick-level">
+    <span>{{slotLabel}}</span>
+    <select name="slot">
+      {{#each slotOptions}}
+      <option value="{{value}}" {{#if selected}}selected{{/if}} {{#if disabled}}disabled{{/if}}>{{label}}</option>
+      {{/each}}
+    </select>
+  </label>
+</div>

@@ -123,6 +123,11 @@ export function wouldConsumeSpellSlot(activity, usageConfig={}) {
     && Boolean(activity?.consumption?.spellSlot);
 }
 
+export function needsSlotPick(activity, usageConfig={}) {
+  if (usageConfig?.irisSlotPicked || usageConfig?.irisRepeat || usageConfig?.irisReaction) return false;
+  return Boolean(activity?.canScale && activity?.requiresSpellSlot && activity?.item?.system?.level > 0);
+}
+
 export function shouldUseSpellPoints(activity, usageConfig={}) {
   try {
     const actor = activity?.actor ?? activity?.item?.actor ?? activity?.item?.parent;

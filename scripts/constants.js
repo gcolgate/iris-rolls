@@ -1,10 +1,12 @@
 export const MODULE_ID = "iris-rolls";
 export const TEMPLATE = `modules/${MODULE_ID}/templates/roll-card.hbs`;
 export const DIE_EDIT_TEMPLATE = `modules/${MODULE_ID}/templates/die-edit.hbs`;
+export const SLOT_PICK_TEMPLATE = `modules/${MODULE_ID}/templates/slot-pick.hbs`;
 
 export const state = {
   suppressCards: 0,
   activityDepth: 0,
+  liveRetargetPause: 0,
   rollerUuid: "",
   repeatTargets: null,
   repeat: null,

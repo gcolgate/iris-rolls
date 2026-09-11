@@ -1,8 +1,8 @@
-import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
-import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids } from "./targets.js";
+import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
+import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
-import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets } from "./card.js";
-import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel } from "./resources.js";
+import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
+import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
 import { shouldApplyReliableTalent } from "./features.js";
 import { enablePlayerTokenSelect } from "./select.js";
 
@@ -238,7 +238,15 @@ async function handleActivity(activity, usageConfig={}, results={}) {
 
 Hooks.once("init", () => {
   const loader = foundry.applications?.handlebars?.loadTemplates ?? loadTemplates;
-  loader([TEMPLATE, DIE_EDIT_TEMPLATE]);
+  loader([TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE]);
+  game.settings.register(MODULE_ID, "liveRetarget", {
+    name: localize("SettingLiveRetarget"),
+    hint: localize("SettingLiveRetargetHint"),
+    scope: "client",
+    config: true,
+    type: Boolean,
+    default: true
+  });
 });
 
 Hooks.once("setup", () => {
@@ -263,10 +271,45 @@ Hooks.once("ready", () => {
     if (app?.document?.documentName === "Actor") bindSheetAsRoller(app);
   });
 
+  function retryActivityUse(activity, usageConfig, dialogConfig, messageConfig) {
+    void activity.use(usageConfig, dialogConfig, messageConfig).catch(err => {
+      console.error(`${MODULE_ID} | activity`, err);
+      ui.notifications.error(localize("FailedCard"));
+    });
+  }
+
   Hooks.on("dnd5e.preUseActivity", (activity, usageConfig, dialogConfig, messageConfig) => {
     dialogConfig.configure = false;
     if (usageConfig?.irisReaction) return;
     if (!HANDLED_ACTIVITIES.has(activity.type)) return;
+
+    if (!usageConfig.irisTargetsReady && !usageConfig.irisRepeat && attackNeedsTarget(activity)) {
+      const usage = foundry.utils.deepClone(usageConfig);
+      const dialog = foundry.utils.deepClone(dialogConfig);
+      const message = foundry.utils.deepClone(messageConfig);
+      void waitForAttackTargets(activity).then(() => {
+        retryActivityUse(activity, { ...usage, irisTargetsReady: true }, dialog, message);
+      }).catch(err => console.error(`${MODULE_ID} | target prompt`, err));
+      return false;
+    }
+
+    if (needsSlotPick(activity, usageConfig)) {
+      const usage = foundry.utils.deepClone(usageConfig);
+      const dialog = foundry.utils.deepClone(dialogConfig);
+      const message = foundry.utils.deepClone(messageConfig);
+      void promptSpellSlot(activity, usage).then(choice => {
+        if (!choice) return;
+        retryActivityUse(activity, {
+          ...usage,
+          irisSlotPicked: true,
+          irisTargetsReady: true,
+          spell: { ...(usage.spell ?? {}), slot: choice.key },
+          scaling: choice.scaling
+        }, dialog, message);
+      }).catch(err => console.error(`${MODULE_ID} | slot prompt`, err));
+      return false;
+    }
+
     usageConfig.subsequentActions = false;
     messageConfig.create = false;
     usageConfig.irisRolls = true;

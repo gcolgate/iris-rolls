@@ -1,12 +1,12 @@
-import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, localize, renderHbs, getPayload, hasPayload, state } from "./constants.js";
-import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, isDexSave, maxTargetCount, liveTemplateUuids, tokensInTemplates, targetsFromTokens, selectTokens, setRollerFromActor, placeActivityTemplates, deleteTemplates, actorFromTarget, actorFromTargetSync } from "./targets.js";
+import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, localize, renderHbs, getPayload, hasPayload, state } from "./constants.js";
+import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, isDexSave, maxTargetCount, liveTemplateUuids, tokensInTemplates, targetsFromTokens, selectTokens, setRollerFromActor, placeActivityTemplates, deleteTemplates, actorFromTarget, actorFromTargetSync, liveArmorClass, hasNonRollerSelection } from "./targets.js";
 import { dualFromRoll, usedDieIndex, rollTotal, damageTotal, selectDamage, rollQuiet, rollNormalAndCritDamage, rollD20Face, formatDamageTooltip, formatPartsTooltip } from "./dice.js";
 import { listDieOptions, consumeDieOption, consumeFeatureUse } from "./features.js";
 import { listTargetReactions, applyTargetReaction, useReactionItem } from "./reactions.js";
 import {
   listSlotOptions, listSpellPointOptions, remainingConsumption, remainingResources, ownedUpdate, restoreRecord,
   refundRemaining, refundResources, consumeSpellSlot, consumeSpellPoints, scaledActivity, slotLevelLabel,
-  getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel
+  getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, shouldUseSpellPoints, castSlotKey
 } from "./resources.js";
 
 function isApplyableEffect(effect) {
@@ -154,7 +154,7 @@ export async function fillTargetSave(target, activity, dc, saveAbilities=[]) {
   target.saveMode ??= "normal";
   target.saveSituational ??= 0;
   target.img = describeActor(actor).img;
-  target.ac = actor.system?.attributes?.ac?.value ?? target.ac;
+  target.ac = liveArmorClass(actor, target.ac);
   return rolls;
 }
 
@@ -443,14 +443,33 @@ function outcomeCopy(outcome, { isSave=false }={}) {
   return "";
 }
 
-function miniDice(values=[], mode="normal", { critThreshold=20, minFace=0, clickable=true }={}) {
+function signedBonus(value) {
+  const n = Number(value) || 0;
+  return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function dieTooltip({ roll, bonus=0, hint="", talent=false }={}) {
+  const lines = [
+    localize("DieRoll", { roll }),
+    localize("DieBonus", { bonus: signedBonus(bonus) })
+  ];
+  if (talent) lines.push(localize("ReliableTalent"));
+  if (hint) lines.push(hint);
+  return lines.join("\n");
+}
+
+function miniDice(values=[], mode="normal", { critThreshold=20, minFace=0, clickable=true, bonus=0, situational=0 }={}) {
   const used = usedDieIndex(values, mode);
+  const extra = (Number(bonus) || 0) + (Number(situational) || 0);
   return values.map((value, i) => {
     const isUsed = i === used;
-    const shown = isUsed && minFace > 0 ? Math.max(Number(value) || 0, minFace) : value;
-    const floored = isUsed && shown !== value;
+    const raw = Number(value) || 0;
+    const shown = isUsed && minFace > 0 ? Math.max(raw, minFace) : raw;
+    const floored = isUsed && shown !== raw;
+    const hint = clickable && isUsed ? localize("AdjustDieHint") : "";
     return {
-      value: shown,
+      value: shown + extra,
+      face: shown,
       index: i,
       clickable: Boolean(clickable && isUsed),
       css: [
@@ -460,9 +479,26 @@ function miniDice(values=[], mode="normal", { critThreshold=20, minFace=0, click
         isUsed && shown >= critThreshold ? "crit" : "",
         isUsed && shown === 1 ? "fumble" : ""
       ].filter(Boolean).join(" "),
-      title: floored ? localize("ReliableTalent") : clickable && isUsed ? localize("AdjustDieHint") : ""
+      title: dieTooltip({ roll: shown, bonus: extra, hint, talent: floored })
     };
   });
+}
+
+function refreshDieFaces(root, extra) {
+  if (!root) return;
+  const bonus = Number(extra) || 0;
+  for (const die of root.querySelectorAll(".iris-die[data-die-face]")) {
+    const face = Number(die.dataset.dieFace) || 0;
+    const faceEl = die.querySelector(".iris-face");
+    if (faceEl) faceEl.textContent = String(face + bonus);
+    const hint = die.classList.contains("iris-die-edit") ? localize("AdjustDieHint") : "";
+    die.dataset.tooltip = dieTooltip({
+      roll: face,
+      bonus,
+      hint,
+      talent: die.classList.contains("floored")
+    });
+  }
 }
 
 export function viewModel(payload) {
@@ -544,8 +580,22 @@ export function viewModel(payload) {
       const showTargetModes = (payload.kind === "attack" && Array.isArray(t.d20))
         || (isSave && Array.isArray(t.saveD20));
       const targetDice = payload.kind === "attack" && t.d20
-        ? miniDice(t.d20, attackMode, { critThreshold: payload.critThreshold ?? 20, clickable: true })
-        : isSave && t.saveD20 ? miniDice(t.saveD20, saveMode, { clickable: true }) : null;
+        ? miniDice(t.d20, attackMode, {
+          critThreshold: payload.critThreshold ?? 20,
+          clickable: true,
+          bonus: t.bonus ?? payload.bonus,
+          situational: t.situational ?? 0
+        })
+        : isSave && t.saveD20
+          ? miniDice(t.saveD20, saveMode, {
+            clickable: true,
+            bonus: t.saveBonus ?? 0,
+            situational: t.saveSituational ?? 0
+          })
+          : null;
+      const rollBonus = payload.kind === "attack"
+        ? (Number(t.bonus ?? payload.bonus) || 0)
+        : (Number(t.saveBonus) || 0);
       const damageMods = (t.damageLines ?? []).map(line => ({
         type: line.type,
         typeKey: line.typeKey,
@@ -581,6 +631,7 @@ export function viewModel(payload) {
         outcomeLabel: outcomeCopy(t.outcome, { isSave }),
         outcomeClass: t.outcome ?? "",
         targetDice,
+        rollBonus,
         attackDetail: hasAttackSum,
         saveDetail: hasSaveSum,
         rollTotal: hasSaveSum ? t.saveTotal : t.displayTotal,
@@ -608,25 +659,14 @@ export function viewModel(payload) {
     hasD20,
     showModes: hasD20,
     reliableTalentApplied: Boolean(payload.reliableTalent && Number(payload.d20?.[payload.usedIndex]) < 10),
-    dice: (payload.d20 ?? []).map((value, i) => {
-      const used = i === payload.usedIndex;
-      const shown = used && payload.reliableTalent ? Math.max(Number(value) || 0, 10) : value;
-      const floored = used && shown !== value;
-      const css = [
-        used ? "used" : "unused",
-        used ? "iris-die-edit" : "",
-        floored ? "floored" : "",
-        shown >= (payload.critThreshold ?? 20) ? "crit" : "",
-        shown === 1 ? "fumble" : ""
-      ].filter(Boolean).join(" ");
-      return {
-        value: shown,
-        index: i,
-        clickable: used,
-        css,
-        title: floored ? localize("ReliableTalent") : used ? localize("AdjustDieHint") : ""
-      };
-    }),
+    dice: hasD20 ? miniDice(payload.d20, payload.mode ?? "normal", {
+      critThreshold: payload.critThreshold ?? 20,
+      minFace: payload.reliableTalent ? 10 : 0,
+      clickable: true,
+      bonus: payload.bonus,
+      situational: payload.situational
+    }) : [],
+    rollBonus: Number(payload.bonus) || 0,
     displayTotal: payload.displayTotal,
     versus,
     modeNormal: payload.mode === "normal",
@@ -654,6 +694,7 @@ export function viewModel(payload) {
     damageBonus: Number(payload.damageBonus) || 0,
     damageBase: damageTotal(damage.parts),
     damageTotal: damageTotal(damage.parts) + (Number(payload.damageBonus) || 0),
+    totalDamageLabel: isHeal ? localize("TotalHealing") : localize("TotalDamage"),
     damageTooltip: formatPartsTooltip(damage.parts ?? [], payload.damageBonus),
     critDamageLines: payload.kind === "attack" && (payload.targets ?? []).some(t => t.outcome === "crit")
       ? ((payload.critDamage?.a ?? payload.critDamage?.b) ?? []).map(p => ({
@@ -805,12 +846,22 @@ export async function postCard(payload, { actor, rolls=[] }={}) {
   return created;
 }
 
+function canUpdateMessage(message) {
+  return Boolean(game.user.isGM || message.isAuthor || message.canUserModify?.(game.user, "update"));
+}
+
 export async function refreshMessage(message, payload) {
   computeOutcomes(payload);
   const content = await renderCard(payload);
-  return message.update({
+  const update = {
     content,
     [`flags.${MODULE_ID}`]: payload
+  };
+  if (canUpdateMessage(message)) return message.update(update);
+  game.socket.emit(`module.${MODULE_ID}`, {
+    op: "refreshMessage",
+    messageId: message.id,
+    payload
   });
 }
 
@@ -944,30 +995,27 @@ export async function applyCardDamage(message, actionEl=null) {
   }
   payload.damageApplied = true;
   await refreshMessage(message, payload);
+  playDiceSound();
 }
 
-async function applyEffectToActor(effect, actor, origin, payload) {
-  const originUuid = origin?.uuid ?? effect.uuid;
-  const existing = actor.effects.find(e => e.origin === originUuid && e.name === effect.name);
-  const duration = effect.constructor.getInitialDuration?.() ?? {};
-  const effectFlags = {
-    flags: {
-      dnd5e: {
-        scaling: payload.consumption?.scaling ?? 0
-      }
-    }
-  };
-  if (existing) {
-    await existing.update(foundry.utils.mergeObject({ ...duration, disabled: false }, effectFlags));
-    return existing;
-  }
-  const data = foundry.utils.mergeObject({
-    ...effect.toObject(),
-    disabled: false,
-    transfer: false,
-    origin: originUuid
-  }, effectFlags);
-  if (game.user.isGM || actor.isOwner || actor.canUserModify?.(game.user, "update")) {
+function playDiceSound() {
+  const helper = foundry.audio?.AudioHelper ?? globalThis.AudioHelper;
+  helper?.play?.({ src: CONFIG.sounds.dice, channel: "interface", volume: 0.8, autoplay: true, loop: false });
+}
+
+function combatDurationUntilNextTurn() {
+  const wrapped = CONFIG.ActiveEffect.documentClass.getInitialDuration?.() ?? { duration: {} };
+  const duration = { ...(wrapped.duration ?? {}), rounds: 1, turns: 0 };
+  if (game.combat?.id) duration.combat = game.combat.id;
+  return { duration };
+}
+
+function canMutateActor(actor) {
+  return Boolean(game.user.isGM || actor?.isOwner || actor?.canUserModify?.(game.user, "update"));
+}
+
+async function createActorEffect(actor, data, origin=null) {
+  if (canMutateActor(actor)) {
     const created = await ActiveEffect.implementation.create(data, { parent: actor });
     if (origin?.addDependent && created) await origin.addDependent(created);
     return created;
@@ -976,9 +1024,65 @@ async function applyEffectToActor(effect, actor, origin, payload) {
     op: "createEffect",
     actorUuid: actor.uuid,
     data,
-    originUuid
+    originUuid: origin?.uuid ?? data.origin ?? ""
   });
-  return { uuid: "", name: effect.name };
+  return { uuid: "", name: data.name };
+}
+
+async function applyEffectToActor(effect, actor, origin, payload, extras={}) {
+  const originUuid = origin?.uuid ?? effect.uuid;
+  const existing = actor.effects.find(e => e.origin === originUuid && e.name === effect.name);
+  const duration = extras.duration ?? effect.constructor.getInitialDuration?.() ?? {};
+  const effectFlags = foundry.utils.mergeObject({
+    flags: {
+      dnd5e: {
+        scaling: payload.consumption?.scaling ?? 0
+      }
+    }
+  }, extras.flags ?? {});
+  if (existing) {
+    await existing.update(foundry.utils.mergeObject({ ...duration, disabled: false }, effectFlags));
+    return existing;
+  }
+  const data = foundry.utils.mergeObject({
+    ...effect.toObject(),
+    disabled: false,
+    transfer: false,
+    origin: originUuid,
+    ...duration
+  }, effectFlags);
+  return createActorEffect(actor, data, origin);
+}
+
+function effectTouchesAC(effect) {
+  return (effect?.changes ?? []).some(change => String(change.key ?? "").includes("attributes.ac"));
+}
+
+async function persistShieldEffect(item, actor, payload) {
+  if (!actor) return;
+  const duration = combatDurationUntilNextTurn();
+  const flags = { flags: { [MODULE_ID]: { untilTurnStart: true } } };
+  const acts = item?.system?.activities;
+  const list = !acts ? [] : (typeof acts[Symbol.iterator] === "function" ? [...acts] : Object.values(acts));
+  const activity = list.find(a => a.activation?.type === "reaction") || list[0] || null;
+  const effects = item ? collectApplyableEffects(item, activity) : [];
+  for (const effect of effects) {
+    await applyEffectToActor(effect, actor, item, payload, { duration, flags });
+  }
+  if (effects.some(effectTouchesAC)) return;
+  await createActorEffect(actor, foundry.utils.mergeObject({
+    name: item?.name || "Shield",
+    img: item?.img || "icons/svg/shield.svg",
+    origin: item?.uuid ?? "",
+    disabled: false,
+    transfer: false,
+    changes: [{
+      key: "system.attributes.ac.bonus",
+      mode: CONST.ACTIVE_EFFECT_MODES.ADD,
+      value: "5"
+    }],
+    ...duration
+  }, flags), item);
 }
 
 export async function applyCardEffects(message) {
@@ -1034,6 +1138,72 @@ export async function applyCardEffects(message) {
   payload.effectsApplied = true;
   payload.effectOrigin = origin?.uuid ?? effects[0]?.uuid ?? "";
   await refreshMessage(message, payload);
+}
+
+function isChatLogVisible() {
+  return [...document.querySelectorAll("#chat-log, .chat-log")].some(el => {
+    if (el.offsetParent === null) return false;
+    return !el.closest(".minimized");
+  });
+}
+
+function rollerHasPlayerOwner(payload) {
+  try {
+    const actor = payload.roller?.uuid ? fromUuidSync(payload.roller.uuid) : null;
+    return Boolean(actor?.hasPlayerOwner);
+  } catch {
+    return false;
+  }
+}
+
+function targetIdSet(targets=[]) {
+  return new Set((targets ?? []).map(target => target.tokenUuid || target.uuid).filter(Boolean));
+}
+
+function sameTargetSet(a, b) {
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
+}
+
+function latestLiveGmCard() {
+  const messages = game.messages?.contents ?? [...(game.messages ?? [])];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (!hasPayload(message) || !message.isAuthor) continue;
+    const payload = getPayload(message);
+    if (payload.kind === "concentration") continue;
+    if (payload.damageApplied || payload.effectsApplied || payload.undone) continue;
+    if (liveTemplateUuids(payload.templateUuids).length) continue;
+    if (rollerHasPlayerOwner(payload)) continue;
+    return message;
+  }
+  return null;
+}
+
+async function liveRetargetFromSelection() {
+  if (!game.user.isGM) return;
+  try {
+    if (!game.settings.get(MODULE_ID, "liveRetarget")) return;
+  } catch {
+    return;
+  }
+  if (state.liveRetargetPause || state.activityDepth) return;
+  if (!isChatLogVisible()) return;
+  const message = latestLiveGmCard();
+  if (!message) return;
+  const payload = getPayload(message);
+  const rollerUuid = payload.roller?.uuid;
+  if (!hasNonRollerSelection(rollerUuid)) return;
+  let item = null;
+  try { item = payload.itemUuid ? fromUuidSync(payload.itemUuid) : null; } catch { /* missing */ }
+  const scaling = payload.consumption?.scaling ?? 0;
+  const activity = item
+    ? (scaledActivity(item, payload.activityId, scaling) ?? item.system?.activities?.get(payload.activityId) ?? null)
+    : null;
+  const next = resolveTargets(rollerUuid, { activity, scaling });
+  if (sameTargetSet(targetIdSet(payload.targets), targetIdSet(next))) return;
+  await retarget(message, activity);
 }
 
 export async function retarget(message, activity=null, { tokens=null, extra={} }={}) {
@@ -1163,6 +1333,92 @@ async function promptDieForm(html) {
       close: () => resolve(null)
     }, { classes: ["iris-die-dialog"], width: 420 }).render(true);
   });
+}
+
+async function enrichItemDescription(item) {
+  const raw = item?.system?.description?.value || "";
+  if (!raw) return `<p class="iris-muted">${foundry.utils.escapeHTML(localize("NoDescription"))}</p>`;
+  const TextEditorImpl = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor;
+  try {
+    return await TextEditorImpl.enrichHTML(raw, { relativeTo: item, secrets: false, async: true });
+  } catch {
+    return raw;
+  }
+}
+
+function readSlotPick(root, button) {
+  const form = button?.form || root?.querySelector?.("form") || (root instanceof HTMLFormElement ? root : null);
+  return form?.elements?.slot?.value
+    || root?.querySelector?.('select[name="slot"]')?.value
+    || "";
+}
+
+export async function promptSpellSlot(activity, usageConfig={}) {
+  const item = activity?.item;
+  const actor = activity?.actor;
+  if (!item || !actor) return null;
+  const itemLevel = Number(item.system?.level) || 1;
+  const usePoints = shouldUseSpellPoints(activity, usageConfig);
+  const currentKey = usageConfig.spell?.slot || castSlotKey(activity, usageConfig);
+  const slotOptions = usePoints
+    ? listSpellPointOptions(actor, item, { key: currentKey, level: itemLevel })
+    : listSlotOptions(actor, item, currentKey);
+  if (!slotOptions.length) return { key: currentKey, scaling: 0 };
+
+  const html = await renderHbs(SLOT_PICK_TEMPLATE, {
+    name: item.name,
+    img: item.img,
+    description: await enrichItemDescription(item),
+    slotLabel: usePoints ? localize("CastLevel") : localize("Slot"),
+    slotOptions
+  });
+  const collect = (event, button, dialog) => readSlotPick(dialogRoot(button, dialog), button);
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  let key;
+  if (DialogV2?.wait) {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    try {
+      key = await DialogV2.wait({
+        window: { title: localize("CastLevelTitle", { name: item.name }), icon: "fa-solid fa-wand-magic-sparkles" },
+        content: wrap,
+        position: { width: 480 },
+        classes: ["iris-die-dialog", "iris-slot-dialog"],
+        rejectClose: false,
+        buttons: [
+          {
+            action: "ok",
+            label: localize("CastSpell"),
+            icon: "fa-solid fa-check",
+            default: true,
+            callback: collect
+          },
+          { action: "cancel", label: localize("Cancel"), icon: "fa-solid fa-xmark" }
+        ]
+      });
+    } catch {
+      return null;
+    }
+  } else {
+    key = await new Promise(resolve => {
+      new Dialog({
+        title: localize("CastLevelTitle", { name: item.name }),
+        content: html,
+        buttons: {
+          ok: {
+            label: localize("CastSpell"),
+            callback: dlg => resolve(readSlotPick(dlg?.[0] ?? dlg))
+          },
+          cancel: { label: localize("Cancel"), callback: () => resolve(null) }
+        },
+        close: () => resolve(null)
+      }, { classes: ["iris-die-dialog", "iris-slot-dialog"], width: 480 }).render(true);
+    });
+  }
+  if (!key || key === "cancel" || key === "ok") return null;
+  const chosen = slotOptions.find(option => option.value === key) || slotOptions.find(option => option.selected) || slotOptions[0];
+  const chosenLevel = Number(chosen?.level) || slotKeyLevel(actor, key, item);
+  return { key, scaling: Math.max(0, chosenLevel - itemLevel) };
 }
 
 async function onDieEdit(message, actionEl) {
@@ -1311,6 +1567,7 @@ async function onReact(message, actionEl) {
   const follow = await applyTargetReaction(chosen, payload, target, actor);
   if (!follow) return;
   rememberTarget(payload, target);
+  if (chosen === "shield") await persistShieldEffect(follow.item, actor, payload);
   await refreshMessage(message, payload);
   setRollerFromActor(actor);
   if (follow.item) {
@@ -1836,7 +2093,8 @@ export function onChatBonusInput(event) {
     const totalEl = card?.querySelector(".iris-dmg-total");
     const base = Number(totalEl?.dataset?.baseTotal);
     if (totalEl && Number.isFinite(base)) {
-      totalEl.textContent = String(base + (Number(dmgBonus.value) || 0));
+      const valueEl = totalEl.querySelector(".iris-dmg-total-value") ?? totalEl;
+      valueEl.textContent = String(base + (Number(dmgBonus.value) || 0));
     }
     return;
   }
@@ -1871,10 +2129,13 @@ export function onChatBonusInput(event) {
     }
     const appliedEl = row.querySelector(".iris-applied");
     if (appliedEl && target.applied != null) appliedEl.textContent = String(target.applied);
+    refreshDieFaces(row, (Number(row.querySelector("[data-roll-bonus]")?.dataset.rollBonus) || 0) + amount);
     return;
   }
   payload.situational = amount;
   computeOutcomes(payload);
+  const card = input.closest(".iris-card");
+  refreshDieFaces(card, (Number(card?.querySelector("[data-roll-bonus]")?.dataset.rollBonus) || 0) + amount);
   const totalEl = input.closest(".iris-card")?.querySelector(".iris-total");
   if (!totalEl) return;
   const vs = totalEl.querySelector(".iris-vs");
@@ -1894,6 +2155,58 @@ export function bindCardListeners() {
   }, true);
   Hooks.on("renderChatMessageHTML", tidyIrisChatMessage);
   Hooks.on("dnd5e.renderChatMessage", tidyIrisChatMessage);
+  Hooks.on("combatTurnChange", onCombatTurnChange);
+  Hooks.on("deleteCombat", onDeleteCombat);
+  let liveRetargetTimer = 0;
+  Hooks.on("controlToken", () => {
+    if (liveRetargetTimer) window.clearTimeout(liveRetargetTimer);
+    liveRetargetTimer = window.setTimeout(() => {
+      liveRetargetTimer = 0;
+      void liveRetargetFromSelection().catch(err => {
+        console.error(`${MODULE_ID} | live retarget`, err);
+      });
+    }, 50);
+  });
+}
+
+function actorFromCombatTurn(combat, turn) {
+  if (typeof turn === "number") return combat?.turns?.[turn]?.actor ?? combat?.combatant?.actor ?? null;
+  const id = turn?.combatantId ?? turn?.id ?? turn?.combatant?.id;
+  const combatant = (id && combat?.combatants?.get?.(id)) || turn?.combatant || turn || combat?.combatant;
+  return combatant?.actor ?? null;
+}
+
+async function expireUntilTurnStart(actor) {
+  if (!actor) return;
+  if (game.users.activeGM) {
+    if (!game.user.isGM) return;
+  } else if (!actor.isOwner) return;
+  const doomed = [...actor.effects].filter(effect => effect.getFlag(MODULE_ID, "untilTurnStart"));
+  for (const effect of doomed) {
+    try { await effect.delete(); } catch { /* already gone */ }
+  }
+}
+
+function onCombatTurnChange(combat, _prior, current) {
+  void expireUntilTurnStart(actorFromCombatTurn(combat, current));
+}
+
+function onDeleteCombat(combat) {
+  for (const combatant of combat?.combatants ?? []) {
+    void expireUntilTurnStart(combatant.actor);
+  }
+}
+
+function enableOwnedReactButtons(message, root) {
+  if (!root) return;
+  const payload = getPayload(message);
+  for (const btn of root.querySelectorAll("button.iris-react")) {
+    const target = (payload.targets ?? []).find(t => targetKey(t) === btn.dataset.targetUuid);
+    const actor = actorFromTargetSync(target);
+    if (!canUseReaction(message, actor)) continue;
+    btn.disabled = false;
+    btn.removeAttribute("disabled");
+  }
 }
 
 export function tidyIrisChatMessage(message, html) {
@@ -1914,6 +2227,8 @@ export function tidyIrisChatMessage(message, html) {
     }
   }
   content.querySelectorAll('[data-action="placeTemplate"]').forEach(el => el.remove());
+  enableOwnedReactButtons(message, root);
+  requestAnimationFrame(() => enableOwnedReactButtons(message, root));
 }
 
 export async function bindCard(message, html) {
@@ -1922,6 +2237,11 @@ export async function bindCard(message, html) {
 
 export async function handleSocket(payload) {
   if (!game.user.isGM) return;
+  if (payload?.op === "refreshMessage") {
+    const message = game.messages.get(payload.messageId);
+    if (message && payload.payload) await refreshMessage(message, payload.payload);
+    return;
+  }
   if (payload?.op === "applyDamage") {
     const actor = await fromUuid(payload.actorUuid);
     if (!actor) return;

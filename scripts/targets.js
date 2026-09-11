@@ -24,6 +24,17 @@ function tokenId(token) {
   return token.document?.uuid || token.id;
 }
 
+export function liveArmorClass(actor, fallback=null) {
+  const ac = actor?.system?.attributes?.ac;
+  if (!ac) return fallback ?? null;
+  const value = Number(ac.value);
+  if (!Number.isFinite(value)) return fallback ?? null;
+  // dnd5e leaves AE bonuses as a formula string until derived AC folds them in.
+  // Flat AC never folds them; we still need Shield and similar to count.
+  const extra = typeof ac.bonus === "string" ? Number(ac.bonus) : 0;
+  return value + (Number.isFinite(extra) ? extra : 0);
+}
+
 export function actorFromTargetSync(target) {
   if (!target) return null;
   if (target.tokenUuid) {
@@ -136,6 +147,87 @@ export function maxTargetCount(activity, { scaling=0 }={}) {
   return null;
 }
 
+export function pauseLiveRetarget() {
+  state.liveRetargetPause = (state.liveRetargetPause || 0) + 1;
+}
+
+export function resumeLiveRetarget() {
+  state.liveRetargetPause = Math.max(0, (state.liveRetargetPause || 0) - 1);
+}
+
+export function hasNonRollerSelection(rollerUuid) {
+  return [...(canvas.tokens?.controlled ?? [])].some(token => token?.actor && !isSameActor(token.actor, rollerUuid));
+}
+
+function keepNonRollerSelection(rollerUuid) {
+  const others = [...(canvas.tokens?.controlled ?? [])].filter(token => token?.actor && !isSameActor(token.actor, rollerUuid));
+  if (others.length) selectTokens(others);
+}
+
+export function attackNeedsTarget(activity) {
+  if (activity?.type !== "attack") return false;
+  if (activity?.target?.template?.type || activity?.item?.system?.target?.template?.type) return false;
+  return !hasNonRollerSelection(activity.actor?.uuid);
+}
+
+export async function waitForAttackTargets(activity) {
+  pauseLiveRetarget();
+  try {
+    return await waitForAttackTargetsInner(activity);
+  } finally {
+    resumeLiveRetarget();
+  }
+}
+
+async function waitForAttackTargetsInner(activity) {
+  const rollerUuid = activity.actor?.uuid;
+  if (hasNonRollerSelection(rollerUuid)) {
+    keepNonRollerSelection(rollerUuid);
+    return true;
+  }
+
+  const content = `<p class="iris-die-current">${foundry.utils.escapeHTML(localize("PleaseSelectTarget"))}</p>`;
+  const DialogV2 = foundry.applications?.api?.DialogV2;
+  const app = DialogV2
+    ? new DialogV2({
+        window: { title: localize("PleaseSelectTarget"), icon: "fa-solid fa-crosshairs", minimizable: false },
+        content,
+        position: { width: 360 },
+        classes: ["iris-die-dialog", "iris-target-dialog"],
+        modal: false,
+        rejectClose: true,
+        buttons: [{
+          action: "wait",
+          label: localize("PleaseSelectTarget"),
+          disabled: true
+        }]
+      })
+    : new Dialog({
+        title: localize("PleaseSelectTarget"),
+        content,
+        buttons: {}
+      }, { classes: ["iris-die-dialog", "iris-target-dialog"], width: 360 });
+
+  await app.render?.(DialogV2 ? { force: true } : true);
+
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      Hooks.off("controlToken", onControl);
+      keepNonRollerSelection(rollerUuid);
+      void app.close?.({ force: true });
+      resolve(true);
+    };
+    const onControl = () => {
+      if (hasNonRollerSelection(rollerUuid)) finish();
+    };
+    Hooks.on("controlToken", onControl);
+    onControl();
+  });
+}
+
 export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
   const selected = [...(canvas.tokens?.controlled ?? [])].filter(t => t.actor);
   const limit = max ?? maxTargetCount(activity, { scaling });
@@ -155,7 +247,7 @@ export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
     const actor = token.actor;
     if (!actor) continue;
     const isRoller = isSameActor(actor, rollerUuid);
-    if (isRoller && area) continue;
+    if (isRoller && (area || activity?.type === "attack")) continue;
     let sheetActor = actor;
     if (isRoller) {
       try { sheetActor = fromUuidSync(rollerUuid) ?? actor; } catch { sheetActor = actor; }
@@ -165,7 +257,7 @@ export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
       tokenUuid: token.document?.uuid ?? tokenId(token),
       name: token.name,
       img: token.document?.texture?.src || sheetActor.img || actor.img || "icons/svg/mystery-man.svg",
-      ac: sheetActor.system?.attributes?.ac?.value ?? actor.system?.attributes?.ac?.value ?? null,
+      ac: liveArmorClass(sheetActor) ?? liveArmorClass(actor),
       evasion: hasEvasion(sheetActor) || hasEvasion(actor),
       isRoller
     });
@@ -304,7 +396,7 @@ export function targetsFromTokens(tokens=[], rollerUuid="") {
       tokenUuid: token.document?.uuid ?? id,
       name: token.name,
       img: token.document?.texture?.src || sheetActor.img || actor.img || "icons/svg/mystery-man.svg",
-      ac: sheetActor.system?.attributes?.ac?.value ?? actor.system?.attributes?.ac?.value ?? null,
+      ac: liveArmorClass(sheetActor) ?? liveArmorClass(actor),
       evasion: hasEvasion(sheetActor) || hasEvasion(actor),
       isRoller
     });
@@ -328,7 +420,7 @@ export async function reviveRepeatTargets(stored=[], rollerUuid="") {
         tokenUuid: tokenDoc?.uuid ?? t.tokenUuid ?? "",
         name: desc.name || t.name || actor.name,
         img: desc.img || t.img || actor.img,
-        ac: actor.system?.attributes?.ac?.value ?? t.ac ?? null,
+        ac: liveArmorClass(actor, t.ac),
         evasion: hasEvasion(actor),
         isRoller: isSameActor(actor, rollerUuid)
       });
@@ -365,10 +457,15 @@ export function tokensFromTargets(targets=[]) {
 }
 
 export function selectTokens(tokens=[]) {
-  const list = [...tokens].filter(token => token?.actor);
-  canvas.tokens?.releaseAll?.();
-  for (const token of list) {
-    try { token.control?.({ releaseOthers: false }); } catch { /* unowned tokens may not be selectable */ }
+  pauseLiveRetarget();
+  try {
+    const list = [...tokens].filter(token => token?.actor);
+    canvas.tokens?.releaseAll?.();
+    for (const token of list) {
+      try { token.control?.({ releaseOthers: false }); } catch { /* unowned tokens may not be selectable */ }
+    }
+  } finally {
+    resumeLiveRetarget();
   }
 }
 
@@ -383,11 +480,16 @@ export function tokenForActor(actor) {
 
 export function setRollerFromActor(actor) {
   if (!actor) return;
-  state.rollerUuid = actor.uuid;
-  const token = tokenForActor(actor);
-  if (!token) return;
-  token.setTarget(true, { releaseOthers: true, groupSelection: true });
-  game.user.broadcastActivity?.({ targets: [...(game.user.targets ?? [])].map(t => t.id) });
+  pauseLiveRetarget();
+  try {
+    state.rollerUuid = actor.uuid;
+    const token = tokenForActor(actor);
+    if (!token) return;
+    token.setTarget(true, { releaseOthers: true, groupSelection: true });
+    game.user.broadcastActivity?.({ targets: [...(game.user.targets ?? [])].map(t => t.id) });
+  } finally {
+    resumeLiveRetarget();
+  }
 }
 
 export function getIrisRoller() {
