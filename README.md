@@ -36,7 +36,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - **React** shows for the target’s owner on a GM-authored card, not only for the person who rolled.
 - As the GM, with chat visible, changing the selected tokens retargets your most recent unapplied Iris card (not player-character rolls, not concentration, not live AoE templates). Turn this off in **Configure Settings → Iris Rolls → Retarget latest card from selection**.
 
-See the [1.1.2 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2). Older notes: [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.3 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3). Older notes: [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
