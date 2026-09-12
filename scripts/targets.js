@@ -643,12 +643,139 @@ export function wrapRegionPlacement() {
   layer.placeRegions = wrapped;
 }
 
+const AREA_SHAPE_FALLBACK = {
+  circle: "circle",
+  cone: "cone",
+  cube: "rect",
+  cylinder: "circle",
+  line: "ray",
+  radius: "emanation",
+  ray: "ray",
+  rect: "rect",
+  ring: "ring",
+  sphere: "circle",
+  square: "rect",
+  wall: "ray"
+};
+
+export function hasTemplatePlacement() {
+  return typeof dnd5e.canvas?.TemplatePlacement?.fromActivity === "function";
+}
+
+export function activityHasArea(activity) {
+  return Boolean(
+    activity?.target?.template?.type
+    || activity?.item?.system?.target?.template?.type
+  );
+}
+
+function activityTemplate(activity) {
+  return activity?.target?.template ?? activity?.item?.system?.target?.template ?? {};
+}
+
+function templateShapeType(target) {
+  const type = target?.type;
+  if (!type) return "";
+  return CONFIG.DND5E?.areaTargetTypes?.[type]?.template || AREA_SHAPE_FALLBACK[type] || "";
+}
+
+function templateDistance(value, units) {
+  const convert = dnd5e.utils?.convertLength;
+  if (typeof convert === "function" && value) {
+    try {
+      return convert(value, units, canvas.scene.grid.units, { strict: false });
+    } catch { /* fall through */ }
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function irisShapeData(type, target) {
+  const grid = canvas.scene.grid;
+  const scale = grid.size / grid.distance;
+  const size = templateDistance(target.size, target.units) * scale;
+  const width = templateDistance(target.width, target.units) * scale;
+  const data = { x: 0, y: 0, rotation: 0, type, gridBased: false };
+  switch (type) {
+    case "circle":
+      return { ...data, radius: size };
+    case "cone":
+      return { ...data, angle: CONFIG.MeasuredTemplate?.defaults?.angle ?? 53, radius: size };
+    case "emanation":
+      return {
+        base: {
+          x: 0,
+          y: 0,
+          rotation: 0,
+          width: 1,
+          height: 1,
+          type: "token",
+          shape: canvas.grid.isHexagonal ? CONST.TOKEN_SHAPES.ELLIPSE_1 : CONST.TOKEN_SHAPES.RECTANGLE_1
+        },
+        radius: size,
+        type: "emanation",
+        gridBased: false
+      };
+    case "ray":
+    case "line":
+      return { ...data, length: size, width: width || grid.size / 2, type: "line" };
+    case "rect":
+    case "rectangle":
+      return { ...data, width: size, height: size, type: "rectangle" };
+    case "ring":
+      return { ...data, radius: size, outerWidth: width, innerWidth: 0 };
+    default:
+      return null;
+  }
+}
+
+async function placeIrisRegionFromActivity(activity) {
+  const target = activityTemplate(activity);
+  const type = templateShapeType(target);
+  const shape = irisShapeData(type, target);
+  if (!shape) return [];
+
+  const preview = {
+    name: `${activity.item?.name ?? localize("Title")} [${game.user.name}]`,
+    color: game.user.color,
+    displayMeasurements: true,
+    shapes: [shape],
+    levels: canvas.level?.id ? [canvas.level.id] : [],
+    visibility: CONST.REGION_VISIBILITY.ALWAYS,
+    flags: {
+      core: { MeasuredTemplate: true },
+      dnd5e: {
+        activity: activity.uuid,
+        item: activity.item?.uuid,
+        origin: activity.getUsageToken?.()?.uuid
+      }
+    }
+  };
+  prepareIrisRegionData(preview);
+
+  const drafts = [];
+  await canvas.regions.placeRegions([preview], {
+    attachToToken: type === "emanation",
+    create: false,
+    preConfirm: ({ document }) => {
+      drafts.push(document.toObject());
+    }
+  });
+  if (!drafts.length) return [];
+  prepareIrisRegionData(drafts);
+  const created = await canvas.scene.createEmbeddedDocuments("Region", drafts);
+  return created.filter(doc => doc?.uuid);
+}
+
 export async function placeActivityTemplates(activity) {
   if (!activity || !game.user.can("REGION_CREATE") || !canvas?.scene) return [];
   try {
-    const created = await dnd5e.canvas?.TemplatePlacement?.fromActivity?.(activity);
-    if (!created) return [];
-    return [...created].filter(doc => doc?.uuid);
+    if (hasTemplatePlacement()) {
+      const created = await dnd5e.canvas.TemplatePlacement.fromActivity(activity);
+      if (!created) return [];
+      return [...created].filter(doc => doc?.uuid);
+    }
+    return await placeIrisRegionFromActivity(activity);
   } catch {
     return [];
   }

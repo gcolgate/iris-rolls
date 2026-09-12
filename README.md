@@ -9,7 +9,7 @@ This release is for testing (including The Forge). Treat it as alpha. It is slow
 ## Requirements
 
 - Foundry Virtual Tabletop v14
-- [D&D 5e](https://foundryvtt.com/packages/dnd5e) 6.0.0 or later (verified on 6.0.1)
+- [D&D 5e](https://foundryvtt.com/packages/dnd5e) 5.3.3 or later (verified on 6.0.1; 5.3.3 is untested)
 
 Do not enable this together with Midi QOL or Ready Set Roll. Those modules also replace 5e roll cards, and Iris Rolls will warn if they are active.
 
@@ -23,15 +23,19 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
+## What's new in 1.1.5
+
+- An attempt was made to support D&D 5e **5.3.3** on Foundry 14. On 6.0 the system still places the area region; on 5.3.3 Iris places a Scene Region itself so Fireball can work. **This 5.3.3 path has not been tested yet.**
+
 ## What's new in 1.1.4
 
-- Requires Foundry VTT v14 and D&D 5e 6.0 (verified on 6.0.1). Foundry 13 and 5e 5.x are no longer supported.
+- Requires Foundry VTT v14 and D&D 5e 6.0 (verified on 6.0.1).
 - Area spells use Foundry 14 **Scene Regions** instead of measured templates. Tokens standing in the region are selected as targets, including tokens a player does not own.
 - Chat cards say **Remove Region** and **Replace Region**. Those buttons delete or replace the region and retarget creatures inside the new one.
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.3 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3) for the previous release. Older notes: [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.4 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4). Older notes: [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 

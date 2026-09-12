@@ -1,5 +1,5 @@
 import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
-import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement } from "./targets.js";
+import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, hasTemplatePlacement, activityHasArea, placeActivityTemplates } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
@@ -107,6 +107,12 @@ async function handleActivity(activity, usageConfig={}, results={}) {
     const tokenObjs = tokensFromTargets(targets);
     if (tokenObjs.length) selectTokens(tokenObjs);
   } else if (templateUuids.length) {
+    const tokens = await tokensInTemplates(templateUuids);
+    selectTokens(tokens);
+    targets = targetsFromTokens(tokens, roller.uuid);
+  } else if (activityHasArea(rolling) || activityHasArea(activity)) {
+    const created = await placeActivityTemplates(rolling);
+    templateUuids = created.map(doc => doc.uuid);
     const tokens = await tokensInTemplates(templateUuids);
     selectTokens(tokens);
     targets = targetsFromTokens(tokens, roller.uuid);
@@ -342,7 +348,7 @@ Hooks.once("ready", () => {
     if (usageConfig.irisRepeat) usageConfig.create = false;
     else if (activity.target?.template?.type) {
       usageConfig.create ??= {};
-      usageConfig.create.measuredTemplate = true;
+      usageConfig.create.measuredTemplate = hasTemplatePlacement();
     }
   });
 
