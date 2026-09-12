@@ -595,6 +595,54 @@ export function bindSheetAsRoller(app) {
   }, { capture: true });
 }
 
+function disableShapeGrid(shape) {
+  if (!shape || typeof shape !== "object") return;
+  shape.gridBased = false;
+  if (shape.base) disableShapeGrid(shape.base);
+  if (Array.isArray(shape.shapes)) {
+    for (const inner of shape.shapes) disableShapeGrid(inner);
+  }
+}
+
+function trueShapeHighlight() {
+  const field = CONFIG.Region?.documentClass?.schema?.fields?.highlightMode;
+  const raw = field?.choices;
+  const keys = Array.isArray(raw) ? raw : (raw && typeof raw === "object" ? Object.keys(raw) : []);
+  return keys.find(key => key && key !== "coverage") || "shape";
+}
+
+function isSpellAreaRegion(region) {
+  if (!region) return false;
+  return Boolean(
+    region.flags?.core?.MeasuredTemplate
+    || region["flags.core.MeasuredTemplate"]
+    || region.flags?.dnd5e?.activity
+  );
+}
+
+export function prepareIrisRegionData(regionData) {
+  const regions = Array.isArray(regionData) ? regionData : [regionData];
+  const highlight = trueShapeHighlight();
+  for (const region of regions) {
+    if (!region) continue;
+    region.highlightMode = highlight;
+    for (const shape of region.shapes ?? []) disableShapeGrid(shape);
+  }
+}
+
+export function wrapRegionPlacement() {
+  const layer = canvas?.regions;
+  if (!layer?.placeRegions || layer.placeRegions._iris) return;
+  const original = layer.placeRegions.bind(layer);
+  const wrapped = function(data, options) {
+    const list = Array.isArray(data) ? data : (data ? [data] : []);
+    if (list.some(isSpellAreaRegion)) prepareIrisRegionData(list);
+    return original(data, options);
+  };
+  wrapped._iris = true;
+  layer.placeRegions = wrapped;
+}
+
 export async function placeActivityTemplates(activity) {
   if (!activity || !game.user.can("REGION_CREATE") || !canvas?.scene) return [];
   try {

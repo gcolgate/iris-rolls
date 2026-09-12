@@ -1,5 +1,5 @@
 import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
-import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets } from "./targets.js";
+import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
@@ -262,6 +262,8 @@ Hooks.once("ready", () => {
   game.socket.on(`module.${MODULE_ID}`, handleSocket);
   bindCardListeners();
   wrapSpeakerForIrisRoller();
+  wrapRegionPlacement();
+  Hooks.on("canvasReady", () => wrapRegionPlacement());
   state.handleActivity = handleActivity;
 
   const bindSheet = app => bindSheetAsRoller(app);
@@ -342,6 +344,14 @@ Hooks.once("ready", () => {
       usageConfig.create ??= {};
       usageConfig.create.measuredTemplate = true;
     }
+  });
+
+  Hooks.on("dnd5e.createMeasuredTemplate", (_activity, regionData) => {
+    prepareIrisRegionData(regionData);
+  });
+
+  Hooks.on("preCreateRegion", (_doc, data) => {
+    if (data?.flags?.core?.MeasuredTemplate || data?.flags?.dnd5e?.activity) prepareIrisRegionData(data);
   });
 
   Hooks.on("dnd5e.preActivityConsumption", (activity, usageConfig) => {

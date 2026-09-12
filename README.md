@@ -28,6 +28,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Requires Foundry VTT v14 and D&D 5e 6.0 (verified on 6.0.1). Foundry 13 and 5e 5.x are no longer supported.
 - Area spells use Foundry 14 **Scene Regions** instead of measured templates. Tokens standing in the region are selected as targets, including tokens a player does not own.
 - Chat cards say **Remove Region** and **Replace Region**. Those buttons delete or replace the region and retarget creatures inside the new one.
+- Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
 See the [1.1.3 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3) for the previous release. Older notes: [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
