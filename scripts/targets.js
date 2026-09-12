@@ -187,28 +187,22 @@ async function waitForAttackTargetsInner(activity) {
   }
 
   const content = `<p class="iris-die-current">${foundry.utils.escapeHTML(localize("PleaseSelectTarget"))}</p>`;
-  const DialogV2 = foundry.applications?.api?.DialogV2;
-  const app = DialogV2
-    ? new DialogV2({
-        window: { title: localize("PleaseSelectTarget"), icon: "fa-solid fa-crosshairs", minimizable: false },
-        content,
-        position: { width: 360 },
-        classes: ["iris-die-dialog", "iris-target-dialog"],
-        modal: false,
-        rejectClose: true,
-        buttons: [{
-          action: "wait",
-          label: localize("PleaseSelectTarget"),
-          disabled: true
-        }]
-      })
-    : new Dialog({
-        title: localize("PleaseSelectTarget"),
-        content,
-        buttons: {}
-      }, { classes: ["iris-die-dialog", "iris-target-dialog"], width: 360 });
+  const DialogV2 = foundry.applications.api.DialogV2;
+  const app = new DialogV2({
+    window: { title: localize("PleaseSelectTarget"), icon: "fa-solid fa-crosshairs", minimizable: false },
+    content,
+    position: { width: 360 },
+    classes: ["iris-die-dialog", "iris-target-dialog"],
+    modal: false,
+    rejectClose: true,
+    buttons: [{
+      action: "wait",
+      label: localize("PleaseSelectTarget"),
+      disabled: true
+    }]
+  });
 
-  await app.render?.(DialogV2 ? { force: true } : true);
+  await app.render({ force: true });
 
   return new Promise(resolve => {
     let settled = false;
@@ -319,58 +313,107 @@ export function liveTemplateUuids(uuids=[]) {
   });
 }
 
-function waitForTemplateObject(doc) {
-  const ready = () => doc?.object ?? canvas.templates?.get(doc?.id) ?? null;
-  const existing = ready();
-  if (existing?.shape) return existing;
-  return new Promise(resolve => {
-    const hook = Hooks.on("refreshMeasuredTemplate", placeable => {
-      if (placeable?.id !== doc?.id && placeable?.document?.id !== doc?.id) return;
-      if (!placeable?.shape) return;
-      Hooks.off("refreshMeasuredTemplate", hook);
-      resolve(placeable);
-    });
-    window.setTimeout(() => {
-      Hooks.off("refreshMeasuredTemplate", hook);
-      resolve(ready());
-    }, 400);
-  });
+function regionFromDoc(doc) {
+  if (!doc) return null;
+  if (doc.documentName === "Region") return doc;
+  if (doc.document?.documentName === "Region") return doc.document;
+  return null;
 }
 
-function pointInTemplate(point, object, doc) {
-  if (!point) return false;
-  if (object && typeof object.testPoint === "function") {
-    try { return Boolean(object.testPoint(point)); } catch { /* fall through */ }
-  }
-  const shape = object?.shape;
-  if (shape && typeof shape.contains === "function") {
-    const ox = object.x ?? doc?.x ?? 0;
-    const oy = object.y ?? doc?.y ?? 0;
-    if (shape.contains(point.x - ox, point.y - oy)) return true;
-    const cx = object.center?.x ?? ox;
-    const cy = object.center?.y ?? oy;
-    if (shape.contains(point.x - cx, point.y - cy)) return true;
+function tokenIsHidden(token, tokenDoc) {
+  return Boolean(
+    token?.document?.hidden
+    || token?.document?.isSecret
+    || tokenDoc?.hidden
+    || tokenDoc?.isSecret
+  );
+}
+
+function tokenCenter(token) {
+  return token?.center ?? token?.getCenterPoint?.() ?? (token ? { x: token.x, y: token.y } : null);
+}
+
+function regionMembers(region) {
+  try { return [...(region?.tokens ?? [])]; } catch { return []; }
+}
+
+function tokenInMemberList(token, members) {
+  const tokenDoc = token?.document;
+  return members.some(member => (
+    member === token
+    || member === tokenDoc
+    || member?.id === token?.id
+    || member?.id === tokenDoc?.id
+    || member?.uuid === tokenDoc?.uuid
+  ));
+}
+
+function pointInRegion(point, region, token) {
+  if (!point || !region) return false;
+  const elevation = Number(token?.document?.elevation ?? token?.elevation ?? 0);
+  const object = region.object ?? canvas.regions?.get(region.id);
+  const testers = [
+    () => region.testPoint?.(point, elevation),
+    () => region.testPoint?.({ ...point, elevation }),
+    () => region.testPoint?.(point),
+    () => object?.testPoint?.(point, elevation),
+    () => object?.testPoint?.(point),
+    () => region.polygonTree?.testPoint(point),
+    () => object?.document?.polygonTree?.testPoint(point)
+  ];
+  for (const test of testers) {
+    try {
+      if (test()) return true;
+    } catch { /* try the next API */ }
   }
   return false;
 }
 
+function waitForRegionReady(region) {
+  const ready = () => Boolean(
+    region.polygonTree
+    || region.object
+    || canvas.regions?.get(region.id)
+    || (region.tokens?.size ?? region.tokens?.length)
+  );
+  if (ready()) return region;
+  return new Promise(resolve => {
+    const finish = () => {
+      Hooks.off("refreshRegion", onRefresh);
+      resolve(region);
+    };
+    const onRefresh = placeable => {
+      const id = placeable?.id ?? placeable?.document?.id;
+      if (id === region.id) finish();
+    };
+    Hooks.on("refreshRegion", onRefresh);
+    window.setTimeout(finish, 400);
+  });
+}
+
 export async function tokensInTemplates(uuids=[]) {
-  const objects = [];
+  const regions = [];
   for (const uuid of uuids) {
     let doc = null;
     try { doc = await fromUuid(uuid); } catch {}
-    if (!doc) continue;
-    const object = await waitForTemplateObject(doc);
-    if (object || doc) objects.push({ doc, object });
+    const region = regionFromDoc(doc);
+    if (!region) continue;
+    await waitForRegionReady(region);
+    regions.push(region);
   }
   const seen = new Set();
   const tokens = [];
   for (const token of canvas.tokens?.placeables ?? []) {
     if (!token.actor) continue;
-    if (!game.user.isGM && (token.document?.hidden || token.document?.isSecret)) continue;
+    if (!game.user.isGM && tokenIsHidden(token, token.document)) continue;
     const id = tokenId(token);
     if (!id || seen.has(id)) continue;
-    if (!objects.some(({ object, doc }) => pointInTemplate(token.center, object, doc))) continue;
+    const point = tokenCenter(token);
+    const inside = regions.some(region => {
+      const members = regionMembers(region);
+      return tokenInMemberList(token, members) || pointInRegion(point, region, token);
+    });
+    if (!inside) continue;
     seen.add(id);
     tokens.push(token);
   }
@@ -553,19 +596,14 @@ export function bindSheetAsRoller(app) {
 }
 
 export async function placeActivityTemplates(activity) {
-  if (!activity || !game.user.can("TEMPLATE_CREATE") || !canvas?.scene) return [];
-  const previews = dnd5e.canvas?.AbilityTemplate?.fromActivity?.(activity);
-  if (!previews?.length) return [];
-  const created = [];
-  for (const preview of previews) {
-    try {
-      const result = await preview.drawPreview();
-      if (result) created.push(...(Array.isArray(result) ? result : [result]));
-    } catch {
-      break;
-    }
+  if (!activity || !game.user.can("REGION_CREATE") || !canvas?.scene) return [];
+  try {
+    const created = await dnd5e.canvas?.TemplatePlacement?.fromActivity?.(activity);
+    if (!created) return [];
+    return [...created].filter(doc => doc?.uuid);
+  } catch {
+    return [];
   }
-  return created.filter(doc => doc?.uuid);
 }
 
 export async function deleteTemplates(uuids=[]) {

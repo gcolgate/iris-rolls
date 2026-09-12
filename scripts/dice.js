@@ -59,8 +59,27 @@ export async function rollQuiet(subject, method, config = {}) {
   });
 }
 
+function firstDamageType(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value instanceof Set) return value.size ? value.values().next().value : "";
+  if (Array.isArray(value)) return value.find(Boolean) || "";
+  return "";
+}
+
+export function damageTypesFromRoll(roll) {
+  const opt = roll?.options ?? {};
+  const listed = opt.types ?? opt.damageTypes ?? [];
+  const fromList = listed instanceof Set ? [...listed] : (Array.isArray(listed) ? listed : []);
+  const primary = firstDamageType(opt.type);
+  const types = [...new Set([primary, ...fromList].filter(Boolean))];
+  return types;
+}
+
 export function serializeDamage(rolls = []) {
   return rolls.map(roll => {
+    const types = damageTypesFromRoll(roll);
+    const type = types[0] || "";
     const dice = (roll.dice ?? []).map(die => ({
       formula: die.expression || `${die.number}d${die.faces}`,
       faces: die.faces,
@@ -73,10 +92,11 @@ export function serializeDamage(rolls = []) {
     return {
       formula: roll.formula,
       total: roll.total,
-      type: roll.options?.type ?? "",
+      type,
+      types,
       properties: [...(roll.options?.properties ?? [])],
       dice,
-      tooltip: formatDamageTooltip({ formula: roll.formula, total: roll.total, type: roll.options?.type ?? "", dice })
+      tooltip: formatDamageTooltip({ formula: roll.formula, total: roll.total, type, dice })
     };
   });
 }

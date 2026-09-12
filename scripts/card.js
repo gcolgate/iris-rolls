@@ -194,7 +194,7 @@ function previewDamage(actor, parts, multiplier) {
   if (multiplier === 0) return empty;
   const damages = parts.map(p => ({
     value: Number(p.total) || 0,
-    type: p.type || undefined,
+    type: partTypes(p)[0] || p.type || undefined,
     properties: new Set(p.properties ?? [])
   }));
   if (typeof actor.calculateDamage !== "function") {
@@ -210,9 +210,9 @@ function previewDamage(actor, parts, multiplier) {
   for (const d of calculated) {
     if (d.type === "temphp") continue;
     amount += d.value ?? 0;
-    if (d.active?.immunity) immune = true;
-    if (d.active?.resistance) resistant = true;
-    if (d.active?.vulnerability) vulnerable = true;
+    if (traitActive(d, "immunity")) immune = true;
+    if (traitActive(d, "resistance")) resistant = true;
+    if (traitActive(d, "vulnerability")) vulnerable = true;
   }
   amount = amount > 0 ? Math.floor(amount) : Math.ceil(amount);
   return { amount, immune, resistant, vulnerable };
@@ -224,6 +224,33 @@ function typeKey(type) {
   return type || "none";
 }
 
+function partTypes(part) {
+  const listed = part?.types instanceof Set ? [...part.types] : (Array.isArray(part?.types) ? part.types : []);
+  return [...new Set([part?.type, ...listed].filter(Boolean))];
+}
+
+function traitValues(actor, category) {
+  const raw = actor?.system?.traits?.[category]?.value;
+  if (!raw) return [];
+  if (typeof raw.has === "function") return [...raw];
+  if (Array.isArray(raw)) return raw;
+  return [];
+}
+
+function actorHasDamageTrait(actor, category, type) {
+  if (!actor) return false;
+  const values = traitValues(actor, category).map(value => String(value).toLowerCase());
+  if (type && values.includes(String(type).toLowerCase())) return true;
+  const isHealing = Boolean(type && CONFIG.DND5E?.healingTypes?.[type]);
+  return !isHealing && values.includes("all");
+}
+
+function traitActive(row, category) {
+  const active = row?.active;
+  if (!active) return false;
+  return Boolean(active[category] || active.type?.[category] || active.all?.[category]);
+}
+
 function snapMultiplier(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 1;
@@ -233,8 +260,9 @@ function snapMultiplier(value) {
 function groupDamageParts(parts=[]) {
   const groups = new Map();
   for (const part of parts) {
-    const key = typeKey(part.type);
-    const cur = groups.get(key) ?? { type: part.type || "", total: 0, properties: new Set() };
+    const type = partTypes(part)[0] || part.type || "";
+    const key = typeKey(type);
+    const cur = groups.get(key) ?? { type, total: 0, properties: new Set() };
     cur.total += Number(part.total) || 0;
     for (const prop of part.properties ?? []) cur.properties.add(prop);
     groups.set(key, cur);
@@ -244,17 +272,23 @@ function groupDamageParts(parts=[]) {
 
 function probeTraits(actor, type, properties) {
   const empty = { immune: false, resistant: false, vulnerable: false, trait: 1 };
-  if (!actor || typeof actor.calculateDamage !== "function") return empty;
-  const calculated = actor.calculateDamage([{
-    value: 100,
-    type: type || undefined,
-    properties: properties instanceof Set ? properties : new Set(properties ?? [])
-  }], { multiplier: 1 });
-  const row = calculated?.[0];
-  if (!row) return empty;
-  const immune = Boolean(row.active?.immunity);
-  const resistant = Boolean(row.active?.resistance);
-  const vulnerable = Boolean(row.active?.vulnerability);
+  if (!actor) return empty;
+  let immune = actorHasDamageTrait(actor, "di", type);
+  let resistant = actorHasDamageTrait(actor, "dr", type);
+  let vulnerable = actorHasDamageTrait(actor, "dv", type);
+  if (typeof actor.calculateDamage === "function") {
+    const calculated = actor.calculateDamage([{
+      value: 100,
+      type: type || undefined,
+      properties: properties instanceof Set ? properties : new Set(properties ?? [])
+    }], { multiplier: 1 });
+    const row = calculated?.[0];
+    if (row) {
+      immune ||= traitActive(row, "immunity");
+      resistant ||= traitActive(row, "resistance");
+      vulnerable ||= traitActive(row, "vulnerability");
+    }
+  }
   let trait = 1;
   if (immune) trait = 0;
   else {
@@ -957,8 +991,8 @@ export async function applyCardDamage(message, actionEl=null) {
       const before = hpSnap(actor);
       if (perType) {
         const grouped = applicable.flatMap(line => parts
-          .filter(p => typeKey(p.type) === line.typeKey)
-          .map(p => ({ ...p, total: (Number(p.total) || 0) * line.multiplier })));
+          .filter(p => typeKey(partTypes(p)[0] || p.type) === line.typeKey)
+          .map(p => ({ ...p, type: partTypes(p)[0] || p.type, total: (Number(p.total) || 0) * line.multiplier })));
         if (!grouped.length && extraBonus(payload, target) === 0) continue;
         const adjusted = applyDamageBonusToParts(grouped, extraBonus(payload, target));
         if (!adjusted.length) continue;
@@ -1293,46 +1327,29 @@ function readDieForm(root, button) {
 
 async function promptDieForm(html) {
   const collect = (event, button, dialog) => readDieForm(dialogRoot(button, dialog), button);
-  const DialogV2 = foundry.applications?.api?.DialogV2;
-  if (DialogV2?.wait) {
-    const wrap = document.createElement("div");
-    wrap.innerHTML = html;
-    try {
-      return await DialogV2.wait({
-        window: { title: localize("AdjustDie"), icon: "fa-solid fa-dice-d20" },
-        content: wrap,
-        position: { width: 420 },
-        classes: ["iris-die-dialog"],
-        rejectClose: false,
-        buttons: [
-          {
-            action: "apply",
-            label: localize("ApplyDieChange"),
-            icon: "fa-solid fa-check",
-            default: true,
-            callback: collect
-          },
-          { action: "cancel", label: localize("Cancel"), icon: "fa-solid fa-xmark" }
-        ]
-      });
-    } catch {
-      return null;
-    }
-  }
-  return new Promise(resolve => {
-    new Dialog({
-      title: localize("AdjustDie"),
-      content: html,
-      buttons: {
-        apply: {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html;
+  try {
+    return await foundry.applications.api.DialogV2.wait({
+      window: { title: localize("AdjustDie"), icon: "fa-solid fa-dice-d20" },
+      content: wrap,
+      position: { width: 420 },
+      classes: ["iris-die-dialog"],
+      rejectClose: false,
+      buttons: [
+        {
+          action: "apply",
           label: localize("ApplyDieChange"),
-          callback: dlg => resolve(readDieForm(dlg?.[0] ?? dlg))
+          icon: "fa-solid fa-check",
+          default: true,
+          callback: collect
         },
-        cancel: { label: localize("Cancel"), callback: () => resolve(null) }
-      },
-      close: () => resolve(null)
-    }, { classes: ["iris-die-dialog"], width: 420 }).render(true);
-  });
+        { action: "cancel", label: localize("Cancel"), icon: "fa-solid fa-xmark" }
+      ]
+    });
+  } catch {
+    return null;
+  }
 }
 
 async function enrichItemDescription(item) {
@@ -1373,47 +1390,29 @@ export async function promptSpellSlot(activity, usageConfig={}) {
     slotOptions
   });
   const collect = (event, button, dialog) => readSlotPick(dialogRoot(button, dialog), button);
-  const DialogV2 = foundry.applications?.api?.DialogV2;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html;
   let key;
-  if (DialogV2?.wait) {
-    const wrap = document.createElement("div");
-    wrap.innerHTML = html;
-    try {
-      key = await DialogV2.wait({
-        window: { title: localize("CastLevelTitle", { name: item.name }), icon: "fa-solid fa-wand-magic-sparkles" },
-        content: wrap,
-        position: { width: 480 },
-        classes: ["iris-die-dialog", "iris-slot-dialog"],
-        rejectClose: false,
-        buttons: [
-          {
-            action: "ok",
-            label: localize("CastSpell"),
-            icon: "fa-solid fa-check",
-            default: true,
-            callback: collect
-          },
-          { action: "cancel", label: localize("Cancel"), icon: "fa-solid fa-xmark" }
-        ]
-      });
-    } catch {
-      return null;
-    }
-  } else {
-    key = await new Promise(resolve => {
-      new Dialog({
-        title: localize("CastLevelTitle", { name: item.name }),
-        content: html,
-        buttons: {
-          ok: {
-            label: localize("CastSpell"),
-            callback: dlg => resolve(readSlotPick(dlg?.[0] ?? dlg))
-          },
-          cancel: { label: localize("Cancel"), callback: () => resolve(null) }
+  try {
+    key = await foundry.applications.api.DialogV2.wait({
+      window: { title: localize("CastLevelTitle", { name: item.name }), icon: "fa-solid fa-wand-magic-sparkles" },
+      content: wrap,
+      position: { width: 480 },
+      classes: ["iris-die-dialog", "iris-slot-dialog"],
+      rejectClose: false,
+      buttons: [
+        {
+          action: "ok",
+          label: localize("CastSpell"),
+          icon: "fa-solid fa-check",
+          default: true,
+          callback: collect
         },
-        close: () => resolve(null)
-      }, { classes: ["iris-die-dialog", "iris-slot-dialog"], width: 480 }).render(true);
+        { action: "cancel", label: localize("Cancel"), icon: "fa-solid fa-xmark" }
+      ]
     });
+  } catch {
+    return null;
   }
   if (!key || key === "cancel" || key === "ok") return null;
   const chosen = slotOptions.find(option => option.value === key) || slotOptions.find(option => option.selected) || slotOptions[0];
