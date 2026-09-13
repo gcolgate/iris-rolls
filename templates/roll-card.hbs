@@ -185,9 +185,9 @@
       <span>{{localize "IRISROLLS.BonusDamage"}}</span>
       <input type="number" name="damageBonus" value="{{damageBonus}}" step="1">
     </label>
-    <div class="iris-dmg-total{{#if damageApplied}} is-applied{{/if}}"{{#if hasApply}}{{#unless damageApplied}} data-iris-action="apply"{{/unless}}{{/if}} data-base-total="{{damageBase}}" data-tooltip="{{damageTooltip}}" data-tooltip-class="iris-dmg-tooltip">
+    <div class="iris-dmg-total{{#if damageApplied}} is-applied{{/if}}"{{#if hasApply}}{{#unless damageApplied}} data-iris-action="apply"{{/unless}}{{/if}} data-base-total="{{damageBase}}" data-applied-total="{{appliedDamageTotal}}" data-tooltip="{{damageTooltip}}" data-tooltip-class="iris-dmg-tooltip">
       <span class="iris-dmg-total-label">{{totalDamageLabel}}</span>
-      <span class="iris-dmg-total-value">{{damageTotal}}</span>
+      <span class="iris-dmg-total-value">{{damageTotalDisplay}}</span>
     </div>
     {{#if critDamageLines.length}}
     <h4>{{localize "IRISROLLS.CriticalDamage"}}</h4>

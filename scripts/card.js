@@ -574,6 +574,10 @@ export function viewModel(payload) {
     versus = localize("Versus", { value: localize("DC", { dc: payload.dc }) });
   }
 
+  const rolledDamageTotal = damageTotal(damage.parts) + (Number(payload.damageBonus) || 0);
+  const appliedDamageTotal = (payload.targets ?? [])
+    .reduce((sum, t) => sum + (Number(t.applied) || 0), 0);
+
   return {
     title: payload.title,
     subtitle: payload.subtitle,
@@ -727,7 +731,9 @@ export function viewModel(payload) {
     otherDamageLines: [],
     damageBonus: Number(payload.damageBonus) || 0,
     damageBase: damageTotal(damage.parts),
-    damageTotal: damageTotal(damage.parts) + (Number(payload.damageBonus) || 0),
+    damageTotal: rolledDamageTotal,
+    appliedDamageTotal,
+    damageTotalDisplay: `${rolledDamageTotal} / ${appliedDamageTotal}`,
     totalDamageLabel: isHeal ? localize("TotalHealing") : localize("TotalDamage"),
     damageTooltip: formatPartsTooltip(damage.parts ?? [], payload.damageBonus),
     critDamageLines: payload.kind === "attack" && (payload.targets ?? []).some(t => t.outcome === "crit")
@@ -2093,7 +2099,9 @@ export function onChatBonusInput(event) {
     const base = Number(totalEl?.dataset?.baseTotal);
     if (totalEl && Number.isFinite(base)) {
       const valueEl = totalEl.querySelector(".iris-dmg-total-value") ?? totalEl;
-      valueEl.textContent = String(base + (Number(dmgBonus.value) || 0));
+      const applied = Number(totalEl.dataset?.appliedTotal);
+      const rolled = base + (Number(dmgBonus.value) || 0);
+      valueEl.textContent = Number.isFinite(applied) ? `${rolled} / ${applied}` : String(rolled);
     }
     return;
   }

@@ -23,6 +23,10 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
+## What's new in 1.1.6
+
+- **Total Damage** / **Total Healing** now shows two numbers: the rolled total (dice + bonus), then the sum of damage actually dealt to all targets after hit/miss, saves, resistance, and reactions (for example `44 / 22`). Misses and fully negated damage count as 0 toward the second number.
+
 ## What's new in 1.1.5
 
 - An attempt was made to support D&D 5e **5.3.3** on Foundry 14. On 6.0 the system still places the area region; on 5.3.3 Iris places a Scene Region itself so Fireball can work. **This 5.3.3 path has not been tested yet.**
@@ -35,7 +39,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.4 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4). Older notes: [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.5 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5). Older notes: [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
