@@ -23,6 +23,14 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
+## What's new in 1.1.7
+
+- Attack and damage cards have a **Crit** / **No Crit** toggle next to bonus damage. It follows the roll by default (red when a natural crit), and turns blue when you override it. Changing advantage, the die, or targets re-syncs it.
+- Area regions treat a token as hit if the region intersects its footprint, including Large and larger creatures—not only the center point.
+- Iris Rolls only sets a placed region’s color when **iris-regions** is enabled; otherwise Foundry’s default color is left alone.
+- **Change Targets** and GM live retarget keep extra selected creatures beyond the spell’s target limit, with a warning. The first cast and slot changes still truncate extras.
+- Save activities put applyable effects on the card (for example Slow’s condition) so **Apply** can attach them after failed saves.
+
 ## What's new in 1.1.6
 
 - **Total Damage** / **Total Healing** now shows two numbers: the rolled total (dice + bonus), then the sum of damage actually dealt to all targets after hit/miss, saves, resistance, and reactions (for example `44 / 22`). Misses and fully negated damage count as 0 toward the second number.
@@ -39,7 +47,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.5 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5). Older notes: [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.7 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7). Older notes: [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
@@ -61,8 +69,6 @@ See the [1.1.5 release notes](https://github.com/gcolgate/iris-rolls/releases/ta
 
 MIT. See [LICENSE](LICENSE).
 
-# to do 
-
-Fix prismatic spray
-
- 
+# to do
+Do something about echos in the next release
+issues with magic weapons and bludgeoning

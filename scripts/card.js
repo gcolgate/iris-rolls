@@ -1,6 +1,6 @@
 import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, localize, renderHbs, getPayload, hasPayload, state } from "./constants.js";
 import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, isDexSave, maxTargetCount, liveTemplateUuids, tokensInTemplates, targetsFromTokens, selectTokens, setRollerFromActor, placeActivityTemplates, deleteTemplates, actorFromTarget, actorFromTargetSync, liveArmorClass, hasNonRollerSelection } from "./targets.js";
-import { dualFromRoll, usedDieIndex, rollTotal, damageTotal, selectDamage, rollQuiet, rollNormalAndCritDamage, rollD20Face, formatDamageTooltip, formatPartsTooltip } from "./dice.js";
+import { dualFromRoll, usedDieIndex, rollTotal, damageTotal, selectDamage, naturalDamageCrit, rollQuiet, rollNormalAndCritDamage, rollD20Face, formatDamageTooltip, formatPartsTooltip } from "./dice.js";
 import { listDieOptions, consumeDieOption, consumeFeatureUse } from "./features.js";
 import { listTargetReactions, applyTargetReaction, useReactionItem } from "./reactions.js";
 import {
@@ -11,18 +11,79 @@ import {
 
 function isApplyableEffect(effect) {
   if (!effect) return false;
+  if (typeof effect.toObject !== "function") return false;
   if (effect.type === "enchantment") return false;
   if (effect.getFlag?.("dnd5e", "type") === "enchantment") return false;
   return true;
 }
 
+function activityEffectProfiles(activity) {
+  const listed = activity?.applicableEffects ?? activity?.effects;
+  if (!listed) return [];
+  return [...listed];
+}
+
+function resolveActivityEffect(item, entry) {
+  if (!entry) return null;
+  if (isApplyableEffect(entry)) return entry;
+  const id = entry._id || entry.id;
+  if (id && item?.effects?.get) {
+    const embedded = item.effects.get(id);
+    if (isApplyableEffect(embedded)) return embedded;
+  }
+  if (typeof entry.getEffect === "function") {
+    try {
+      const got = entry.getEffect();
+      // Embedded getEffect is sync; UUID lookups return a Promise we cannot use here.
+      if (got && typeof got.then !== "function" && isApplyableEffect(got)) return got;
+    } catch { /* ignore */ }
+  }
+  return null;
+}
+
+function profileOnSave(entry) {
+  return typeof entry?.onSave === "boolean" ? entry.onSave : null;
+}
+
 export function collectApplyableEffects(item, activity=null) {
-  const fromActivity = (activity?.applicableEffects ?? []).filter(isApplyableEffect);
-  if (fromActivity.length) return fromActivity;
-  const ids = [...(activity?.effects ?? [])].map(entry => entry?._id || entry?.id).filter(Boolean);
-  const byId = ids.map(id => item?.effects?.get(id)).filter(isApplyableEffect);
-  if (byId.length) return byId;
+  const profiles = activityEffectProfiles(activity);
+  if (profiles.length) {
+    const resolved = [];
+    for (const entry of profiles) {
+      const effect = resolveActivityEffect(item, entry);
+      if (effect) resolved.push(effect);
+    }
+    if (resolved.length) return resolved;
+  }
   return [...(item?.effects ?? [])].filter(isApplyableEffect);
+}
+
+export function serializeEffects(item, activity) {
+  const profiles = activityEffectProfiles(activity);
+  if (profiles.length) {
+    return profiles.map(entry => {
+      const effect = resolveActivityEffect(item, entry);
+      if (!effect) return null;
+      return {
+        id: effect.id,
+        name: effect.name,
+        img: effect.img,
+        onSave: profileOnSave(entry)
+      };
+    }).filter(Boolean);
+  }
+  return collectApplyableEffects(item, activity).map(e => ({
+    id: e.id,
+    name: e.name,
+    img: e.img,
+    onSave: null
+  }));
+}
+
+function effectMatchesSaveOutcome(effectMeta, success) {
+  const onSave = effectMeta?.onSave;
+  if (typeof onSave !== "boolean") return !success; // default: apply on failed save
+  return Boolean(success) === onSave;
 }
 
 function canEdit(message) {
@@ -388,7 +449,6 @@ export function computeOutcomes(payload) {
   const shared = rollTotal(payload.d20, payload.mode ?? "normal", payload.bonus, payload.situational, { minFace });
   const critThreshold = payload.critThreshold ?? 20;
   const sharedParts = selectDamage(payload).parts;
-  let anyCrit = false;
   let anyFumble = false;
 
   for (const target of payload.targets ?? []) {
@@ -423,7 +483,6 @@ export function computeOutcomes(payload) {
         target.hit = false;
       }
       target.multiplier = target.hit ? 1 : 0;
-      anyCrit ||= isCrit && target.hit;
       anyFumble ||= isFumble;
     } else if (payload.kind === "save" && target.saveD20) {
       const save = saveRollOf(target);
@@ -457,7 +516,7 @@ export function computeOutcomes(payload) {
 
   payload.displayTotal = shared.total;
   payload.usedIndex = shared.index;
-  payload.isCrit = payload.kind === "attack" ? anyCrit : shared.face >= critThreshold && shared.face !== 1;
+  payload.isCrit = selectDamage(payload).isCrit;
   payload.isFumble = payload.kind === "attack" ? anyFumble : shared.face === 1;
   if (payload.kind === "concentration" || payload.kind === "savingThrow") {
     if (payload.dc != null) {
@@ -713,9 +772,12 @@ export function viewModel(payload) {
     situational: payload.situational ?? 0,
     hasDamage: Boolean(damage.parts?.length),
     hasApply: Boolean(damage.parts?.length) || hasEffects,
-    isCrit: payload.kind === "attack"
-      ? (payload.targets ?? []).some(t => t.outcome === "crit")
-      : Boolean(damage.isCrit),
+    isCrit: Boolean(damage.isCrit),
+    critLabel: damage.isCrit ? localize("Crit") : localize("NoCrit"),
+    critOverridden: payload.critForced != null,
+    showCritToggle: Boolean(damage.parts?.length)
+      && ["attack", "damage"].includes(payload.kind)
+      && Boolean(payload.critDamage),
     damageLabel: payload.kind === "attack"
       ? localize("Damage")
       : damage.isCrit
@@ -736,20 +798,6 @@ export function viewModel(payload) {
     damageTotalDisplay: `${rolledDamageTotal} / ${appliedDamageTotal}`,
     totalDamageLabel: isHeal ? localize("TotalHealing") : localize("TotalDamage"),
     damageTooltip: formatPartsTooltip(damage.parts ?? [], payload.damageBonus),
-    critDamageLines: payload.kind === "attack" && (payload.targets ?? []).some(t => t.outcome === "crit")
-      ? ((payload.critDamage?.a ?? payload.critDamage?.b) ?? []).map(p => ({
-        formula: p.formula,
-        type: p.type,
-        total: p.total,
-        tooltip: formatDamageTooltip(p)
-      }))
-      : [],
-    critDamageTooltip: payload.kind === "attack"
-      ? formatPartsTooltip(payload.critDamage?.a ?? payload.critDamage?.b ?? [], payload.damageBonus)
-      : "",
-    critDamageTotal: (payload.kind === "attack"
-      ? damageTotal(payload.critDamage?.a ?? payload.critDamage?.b ?? [])
-      : 0) + (Number(payload.damageBonus) || 0),
     onSaveLabel: isSave && onSaveKey ? localize("OnSave", { mode: localize(onSaveKey) }) : "",
     applyLabel: isConcentration ? localize("Apply")
       : hasEffects && !damage.parts?.length
@@ -897,6 +945,10 @@ export async function refreshMessage(message, payload) {
     content,
     [`flags.${MODULE_ID}`]: payload
   };
+  if (payload.critForced == null) {
+    delete payload.critForced;
+    update[`flags.${MODULE_ID}.-=critForced`] = null;
+  }
   if (canUpdateMessage(message)) return message.update(update);
   game.socket.emit(`module.${MODULE_ID}`, {
     op: "refreshMessage",
@@ -933,10 +985,7 @@ function hpSnap(actor) {
 }
 
 function applyTargetList(payload) {
-  const list = payload.targets ?? [];
-  const max = Number(payload.maxTargets);
-  if (Number.isFinite(max) && max > 0 && list.length > max) return list.slice(0, max);
-  return list;
+  return payload.targets ?? [];
 }
 
 function extraBonus(payload, target) {
@@ -1128,9 +1177,15 @@ async function persistShieldEffect(item, actor, payload) {
 export async function applyCardEffects(message) {
   const payload = foundry.utils.deepClone(getPayload(message));
   if (payload.effectsApplied) return;
+  computeOutcomes(payload);
   const item = payload.itemUuid ? await fromUuid(payload.itemUuid) : null;
   const activity = item?.system?.activities?.get(payload.activityId) ?? null;
   const effects = collectApplyableEffects(item, activity);
+  const effectMeta = (payload.effects?.length ? payload.effects : serializeEffects(item, activity))
+    .reduce((map, meta) => {
+      if (meta?.id) map.set(meta.id, meta);
+      return map;
+    }, new Map());
   if (!effects.length) {
     ui.notifications.warn(localize("FailedEffect"));
     return;
@@ -1149,14 +1204,19 @@ export async function applyCardEffects(message) {
       return data?.id === item?.id || data?.uuid === item?.uuid;
     }) ?? concentrating[0] ?? effects[0];
   }
-  payload.effects = effects.map(e => ({ id: e.id, name: e.name, img: e.img }));
+  payload.effects = serializeEffects(item, activity);
   payload.appliedEffects ??= [];
   let applied = 0;
   for (const target of targets) {
     const actor = await actorFromTarget(target);
     if (!actor) continue;
+    const forTarget = effects.filter(effect => {
+      if (payload.kind !== "save") return true;
+      return effectMatchesSaveOutcome(effectMeta.get(effect.id) ?? { onSave: null }, target.success);
+    });
+    if (!forTarget.length) continue;
     try {
-      for (const effect of effects) {
+      for (const effect of forTarget) {
         const created = await applyEffectToActor(effect, actor, origin, payload);
         payload.appliedEffects.push({
           uuid: created?.uuid ?? "",
@@ -1241,7 +1301,7 @@ async function liveRetargetFromSelection() {
   const activity = item
     ? (scaledActivity(item, payload.activityId, scaling) ?? item.system?.activities?.get(payload.activityId) ?? null)
     : null;
-  const next = resolveTargets(rollerUuid, { activity, scaling });
+  const next = resolveTargets(rollerUuid, { activity, scaling, enforceLimit: false });
   if (sameTargetSet(targetIdSet(payload.targets), targetIdSet(next))) return;
   await retarget(message, activity);
 }
@@ -1249,6 +1309,7 @@ async function liveRetargetFromSelection() {
 export async function retarget(message, activity=null, { tokens=null, extra={} }={}) {
   const payload = foundry.utils.deepClone(getPayload(message));
   Object.assign(payload, extra);
+  delete payload.critForced;
   rememberTargets(payload);
   const rollerUuid = payload.roller?.uuid;
   const scaling = payload.consumption?.scaling ?? 0;
@@ -1259,7 +1320,7 @@ export async function retarget(message, activity=null, { tokens=null, extra={} }
   }
   payload.targets = tokens
     ? targetsFromTokens(tokens, rollerUuid)
-    : resolveTargets(rollerUuid, { activity: limited, scaling });
+    : resolveTargets(rollerUuid, { activity: limited, scaling, enforceLimit: false });
   payload.maxTargets = maxTargetCount(limited, { scaling });
 
   await hydrateTargetRolls(payload, limited);
@@ -1449,6 +1510,7 @@ async function onDieEdit(message, actionEl) {
   }
 
   const next = foundry.utils.deepClone(getPayload(message));
+  delete next.critForced;
   const nextTarget = targetFromAction(next, actionEl);
   const nextSlot = dieSlot(next, nextTarget);
   if (!nextSlot) return;
@@ -1506,6 +1568,7 @@ async function onDamageMult(message, actionEl) {
 async function onMode(message, mode, actionEl) {
   if (!canEdit(message)) return ui.notifications.warn(localize("NoPermission"));
   const next = foundry.utils.deepClone(getPayload(message));
+  delete next.critForced;
   const target = targetFromAction(next, actionEl);
   if (target) {
     if (next.kind === "save") target.saveMode = mode;
@@ -1522,6 +1585,15 @@ async function onDamageBonus(message, value) {
   if (!canEdit(message)) return ui.notifications.warn(localize("NoPermission"));
   const next = foundry.utils.deepClone(getPayload(message));
   next.damageBonus = Number(value) || 0;
+  await refreshMessage(message, next);
+}
+
+async function onCritToggle(message) {
+  if (!canEdit(message)) return ui.notifications.warn(localize("NoPermission"));
+  const next = foundry.utils.deepClone(getPayload(message));
+  const want = !selectDamage(next).isCrit;
+  const natural = naturalDamageCrit(next);
+  next.critForced = want === natural ? null : want;
   await refreshMessage(message, next);
 }
 
@@ -1571,6 +1643,7 @@ async function onReact(message, actionEl) {
   if (!chosen || chosen === "cancel") return;
   const follow = await applyTargetReaction(chosen, payload, target, actor);
   if (!follow) return;
+  if (chosen === "warding-flare") delete payload.critForced;
   rememberTarget(payload, target);
   if (chosen === "shield") await persistShieldEffect(follow.item, actor, payload);
   await refreshMessage(message, payload);
@@ -2035,14 +2108,22 @@ export function onChatClick(event) {
   const action = actionEl.dataset.irisAction;
   const run = (async () => {
     if (action === "mode") await onMode(message, actionEl.dataset.mode, actionEl);
+    else if (action === "crit") await onCritToggle(message);
     else if (action === "mult") await onDamageMult(message, actionEl);
     else if (action === "die") await onDieEdit(message, actionEl);
     else if (action === "react") await onReact(message, actionEl);
     else if (action === "apply") {
       const kind = getPayload(message).kind;
+      const payload = getPayload(message);
       if (kind === "concentration") await applyConcentrationBreak(message);
-      else if (kind === "utility" || getPayload(message).effects?.length) await applyCardEffects(message);
-      else await applyCardDamage(message, actionEl);
+      else if (kind === "utility") await applyCardEffects(message);
+      else if (payload.effects?.length && !selectDamage(payload).parts?.length) await applyCardEffects(message);
+      else {
+        await applyCardDamage(message, actionEl);
+        if (kind === "save" && payload.effects?.length && !getPayload(message).effectsApplied) {
+          await applyCardEffects(message);
+        }
+      }
     }
     else if (action === "retarget") await onRetarget(message, actionEl);
     else if (action === "clear-template") await onClearTemplate(message);

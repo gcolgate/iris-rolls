@@ -222,7 +222,7 @@ async function waitForAttackTargetsInner(activity) {
   });
 }
 
-export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
+export function resolveTargets(rollerUuid, { activity, max, scaling=0, enforceLimit=true }={}) {
   const selected = [...(canvas.tokens?.controlled ?? [])].filter(t => t.actor);
   const limit = max ?? maxTargetCount(activity, { scaling });
   const area = activity?.target?.template?.type || activity?.item?.system?.target?.template?.type;
@@ -258,8 +258,8 @@ export function resolveTargets(rollerUuid, { activity, max, scaling=0 }={}) {
   }
 
   if (Number.isFinite(limit) && targets.length > limit) {
-    targets.length = limit;
-    ui.notifications.info(localize("TargetLimit", {
+    if (enforceLimit) targets.length = limit;
+    ui.notifications.info(localize(enforceLimit ? "TargetLimit" : "TargetLimitOverride", {
       name: activity?.item?.name || activity?.name || localize("Title"),
       count: limit
     }));
@@ -351,11 +351,14 @@ function tokenInMemberList(token, members) {
 function pointInRegion(point, region, token) {
   if (!point || !region) return false;
   const elevation = Number(token?.document?.elevation ?? token?.elevation ?? 0);
+  const elevated = { x: point.x, y: point.y, elevation };
   const object = region.object ?? canvas.regions?.get(region.id);
   const testers = [
+    () => region.testPoint?.(elevated),
     () => region.testPoint?.(point, elevation),
     () => region.testPoint?.({ ...point, elevation }),
     () => region.testPoint?.(point),
+    () => object?.testPoint?.(elevated),
     () => object?.testPoint?.(point, elevation),
     () => object?.testPoint?.(point),
     () => region.polygonTree?.testPoint(point),
@@ -367,6 +370,139 @@ function pointInRegion(point, region, token) {
     } catch { /* try the next API */ }
   }
   return false;
+}
+
+function tokenFootprint(token) {
+  const doc = token?.document;
+  if (!doc && !token) return null;
+  let width;
+  let height;
+  try {
+    const size = doc?.getSize?.();
+    width = size?.width;
+    height = size?.height;
+  } catch { /* fall through */ }
+  width ??= token?.w ?? ((Number(doc?.width) || 1) * (canvas.grid?.size ?? 100));
+  height ??= token?.h ?? ((Number(doc?.height) || 1) * (canvas.grid?.size ?? 100));
+  const x = Number(doc?.x ?? token?.x ?? 0);
+  const y = Number(doc?.y ?? token?.y ?? 0);
+  const cols = Math.max(1, Math.round(Number(doc?.width) || 1));
+  const rows = Math.max(1, Math.round(Number(doc?.height) || 1));
+  return { x, y, width, height, cols, rows };
+}
+
+function pointInFootprint(point, footprint) {
+  if (!point || !footprint) return false;
+  return point.x >= footprint.x
+    && point.x <= footprint.x + footprint.width
+    && point.y >= footprint.y
+    && point.y <= footprint.y + footprint.height;
+}
+
+function polygonVertices(poly) {
+  const pts = poly?.points ?? poly;
+  if (!pts) return [];
+  const verts = [];
+  if (Array.isArray(pts) && typeof pts[0] === "number") {
+    for (let i = 0; i + 1 < pts.length; i += 2) verts.push({ x: pts[i], y: pts[i + 1] });
+    return verts;
+  }
+  if (Array.isArray(pts)) {
+    for (const p of pts) {
+      const x = Number(p?.x ?? p?.[0]);
+      const y = Number(p?.y ?? p?.[1]);
+      if (Number.isFinite(x) && Number.isFinite(y)) verts.push({ x, y });
+    }
+  }
+  return verts;
+}
+
+function edgesCross(a, b, c, d) {
+  try {
+    return Boolean(foundry.utils.lineSegmentIntersects(a, b, c, d));
+  } catch {
+    return false;
+  }
+}
+
+function regionIntersectsFootprint(region, footprint) {
+  const polygons = region?.polygons ?? region?.polygonTree?.polygons ?? [];
+  if (!polygons.length || !footprint) return false;
+  const corners = [
+    { x: footprint.x, y: footprint.y },
+    { x: footprint.x + footprint.width, y: footprint.y },
+    { x: footprint.x + footprint.width, y: footprint.y + footprint.height },
+    { x: footprint.x, y: footprint.y + footprint.height }
+  ];
+  const tokenEdges = [
+    [corners[0], corners[1]],
+    [corners[1], corners[2]],
+    [corners[2], corners[3]],
+    [corners[3], corners[0]]
+  ];
+  for (const poly of polygons) {
+    const verts = polygonVertices(poly);
+    if (verts.length < 2) continue;
+    for (const vert of verts) {
+      if (pointInFootprint(vert, footprint)) return true;
+    }
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i];
+      const b = verts[(i + 1) % verts.length];
+      for (const [c, d] of tokenEdges) {
+        if (edgesCross(a, b, c, d)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function tokenIntersectsRegion(token, region) {
+  if (!token || !region) return false;
+  const doc = token.document;
+
+  try {
+    if (doc?.testInsideRegion?.(region)) return true;
+  } catch { /* fall through */ }
+
+  if (tokenInMemberList(token, regionMembers(region))) return true;
+
+  try {
+    for (const point of doc?.getContainmentTestPoints?.() ?? []) {
+      if (pointInRegion(point, region, token)) return true;
+    }
+  } catch { /* fall through */ }
+
+  const footprint = tokenFootprint(token);
+  if (!footprint) return pointInRegion(tokenCenter(token), region, token);
+
+  try {
+    const regionBounds = region.bounds ?? region.polygonTree?.bounds;
+    const tokenBounds = new PIXI.Rectangle(footprint.x, footprint.y, footprint.width, footprint.height);
+    if (regionBounds?.intersects && !regionBounds.intersects(tokenBounds)) return false;
+  } catch { /* ignore bounds reject failures */ }
+
+  const { x, y, width, height, cols, rows } = footprint;
+  const cellW = width / cols;
+  const cellH = height / rows;
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < rows; j++) {
+      if (pointInRegion({ x: x + (i + 0.5) * cellW, y: y + (j + 0.5) * cellH }, region, token)) {
+        return true;
+      }
+    }
+  }
+
+  const corners = [
+    { x, y },
+    { x: x + width, y },
+    { x: x + width, y: y + height },
+    { x, y: y + height },
+    { x: x + width / 2, y: y + height / 2 }
+  ];
+  if (corners.some(point => pointInRegion(point, region, token))) return true;
+
+  return regionIntersectsFootprint(region, footprint);
 }
 
 function waitForRegionReady(region) {
@@ -408,11 +544,7 @@ export async function tokensInTemplates(uuids=[]) {
     if (!game.user.isGM && tokenIsHidden(token, token.document)) continue;
     const id = tokenId(token);
     if (!id || seen.has(id)) continue;
-    const point = tokenCenter(token);
-    const inside = regions.some(region => {
-      const members = regionMembers(region);
-      return tokenInMemberList(token, members) || pointInRegion(point, region, token);
-    });
+    const inside = regions.some(region => tokenIntersectsRegion(token, region));
     if (!inside) continue;
     seen.add(id);
     tokens.push(token);
@@ -620,13 +752,78 @@ function isSpellAreaRegion(region) {
   );
 }
 
-export function prepareIrisRegionData(regionData) {
+const ENERGY_ELEMENTS = new Set([
+  "acid", "cold", "fire", "force", "lightning", "necrotic",
+  "poison", "psychic", "radiant", "thunder"
+]);
+const PHYSICAL_ELEMENTS = new Set(["bludgeoning", "piercing", "slashing"]);
+
+function typesFromPart(part) {
+  const raw = part?.types;
+  if (!raw) return [];
+  if (raw instanceof Set) return [...raw];
+  if (Array.isArray(raw)) return [...raw];
+  return [];
+}
+
+function activityFromRegion(region) {
+  const uuid = region?.flags?.dnd5e?.activity;
+  if (!uuid) return null;
+  try { return fromUuidSync(uuid); } catch { return null; }
+}
+
+export function activityDamageElements(activity) {
+  if (!activity) return [];
+  const collected = [];
+  for (const part of activity.damage?.parts ?? []) collected.push(...typesFromPart(part));
+  if (activity.healing) collected.push(...typesFromPart(activity.healing));
+  if (!collected.length && activity.item?.system?.damage?.base) {
+    collected.push(...typesFromPart(activity.item.system.damage.base));
+  }
+  const unique = [...new Set(collected.map(t => String(t || "").toLowerCase()).filter(Boolean))];
+  unique.sort((a, b) => {
+    const rank = t => (ENERGY_ELEMENTS.has(t) ? 0 : PHYSICAL_ELEMENTS.has(t) ? 2 : 1);
+    return rank(a) - rank(b);
+  });
+  return unique;
+}
+
+function foundryShapeType(region) {
+  const type = region?.shapes?.[0]?.type;
+  if (type === "ray") return "line";
+  if (type === "rect") return "rectangle";
+  return type || "";
+}
+
+function fallbackShapeFromActivity(activity) {
+  const type = templateShapeType(activityTemplate(activity));
+  if (type === "ray") return "line";
+  if (type === "rect") return "rectangle";
+  return type || "";
+}
+
+function tagIrisRegion(region, activity) {
+  const elements = activityDamageElements(activity);
+  if (!elements.length) return;
+  region.flags ??= {};
+  region.flags["iris-rolls"] ??= {};
+  const current = region.flags["iris-rolls"].region ?? {};
+  const tagged = { ...current, elements };
+  if (!foundryShapeType(region)) {
+    const shape = fallbackShapeFromActivity(activity);
+    if (shape) tagged.shape = shape;
+  }
+  region.flags["iris-rolls"].region = tagged;
+}
+
+export function prepareIrisRegionData(regionData, activity=null) {
   const regions = Array.isArray(regionData) ? regionData : [regionData];
   const highlight = trueShapeHighlight();
   for (const region of regions) {
     if (!region) continue;
     region.highlightMode = highlight;
     for (const shape of region.shapes ?? []) disableShapeGrid(shape);
+    tagIrisRegion(region, activity ?? activityFromRegion(region));
   }
 }
 
@@ -729,6 +926,10 @@ function irisShapeData(type, target) {
   }
 }
 
+function irisRegionsActive() {
+  return Boolean(game.modules.get("iris-regions")?.active);
+}
+
 async function placeIrisRegionFromActivity(activity) {
   const target = activityTemplate(activity);
   const type = templateShapeType(target);
@@ -737,7 +938,6 @@ async function placeIrisRegionFromActivity(activity) {
 
   const preview = {
     name: `${activity.item?.name ?? localize("Title")} [${game.user.name}]`,
-    color: game.user.color,
     displayMeasurements: true,
     shapes: [shape],
     levels: canvas.level?.id ? [canvas.level.id] : [],
@@ -751,7 +951,8 @@ async function placeIrisRegionFromActivity(activity) {
       }
     }
   };
-  prepareIrisRegionData(preview);
+  if (irisRegionsActive()) preview.color = game.user.color;
+  prepareIrisRegionData(preview, activity);
 
   const drafts = [];
   await canvas.regions.placeRegions([preview], {
@@ -762,7 +963,7 @@ async function placeIrisRegionFromActivity(activity) {
     }
   });
   if (!drafts.length) return [];
-  prepareIrisRegionData(drafts);
+  prepareIrisRegionData(drafts, activity);
   const created = await canvas.scene.createEmbeddedDocuments("Region", drafts);
   return created.filter(doc => doc?.uuid);
 }

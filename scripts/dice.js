@@ -7,7 +7,7 @@ export function usedDieIndex(d20, mode) {
   return 0;
 }
 
-export function rollTotal(d20, mode="normal", bonus=0, situational=0, { minFace=0 }={}) {
+export function rollTotal(d20, mode = "normal", bonus = 0, situational = 0, { minFace = 0 } = {}) {
   const index = usedDieIndex(d20 ?? [0, 0], mode);
   const raw = Number(d20?.[index]) || 0;
   const floor = Number(minFace) || 0;
@@ -101,7 +101,7 @@ export function serializeDamage(rolls = []) {
   });
 }
 
-export function formatDamageTooltip(part={}) {
+export function formatDamageTooltip(part = {}) {
   if (part.tooltip) return part.tooltip;
   const chunks = [];
   for (const die of part.dice ?? []) {
@@ -118,7 +118,7 @@ export function formatDamageTooltip(part={}) {
   return chunks.join(" · ");
 }
 
-export function formatPartsTooltip(parts=[], bonus=0) {
+export function formatPartsTooltip(parts = [], bonus = 0) {
   const lines = parts.map(formatDamageTooltip).filter(Boolean);
   const n = Number(bonus) || 0;
   if (n) lines.push(`bonus: ${n > 0 ? "+" : ""}${n}`);
@@ -137,14 +137,41 @@ export function damageTotal(parts = []) {
   return parts.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
 }
 
-export function selectDamage(payload, target=null) {
+export function naturalDamageCrit(payload, target = null) {
+  const critThreshold = payload?.critThreshold ?? 20;
+  if (target) {
+    const d20 = target.d20 ?? payload?.d20;
+    const mode = target.mode ?? payload?.mode ?? "normal";
+    const hasD20 = Array.isArray(d20) && d20.length >= 2;
+    if (!hasD20) return false;
+    const { face } = rollTotal(d20, mode);
+    return face !== 1 && face >= critThreshold;
+  }
+  if (payload?.kind === "attack") {
+    const targets = payload.targets ?? [];
+    if (targets.length) {
+      return targets.some(t => {
+        if (!Array.isArray(t.d20) || t.d20.length < 2) return false;
+        const { face } = rollTotal(t.d20, t.mode ?? payload.mode ?? "normal");
+        return face !== 1 && face >= critThreshold;
+      });
+    }
+  }
+  const d20 = payload?.d20;
+  const mode = payload?.mode ?? "normal";
+  const hasD20 = Array.isArray(d20) && d20.length >= 2;
+  if (!hasD20) return false;
+  const { face } = rollTotal(d20, mode);
+  return face !== 1 && face >= critThreshold;
+}
+
+export function selectDamage(payload, target = null) {
   const d20 = target?.d20 ?? payload.d20;
   const mode = target?.mode ?? payload.mode ?? "normal";
-  const hasD20 = Array.isArray(d20) && d20.length >= 2;
-  const { index, face } = rollTotal(d20, mode);
-  const isFumble = hasD20 && face === 1;
-  const isCrit = hasD20 && !isFumble && face >= (payload.critThreshold ?? 20);
+  const { index } = rollTotal(d20, mode);
+  const naturalCrit = naturalDamageCrit(payload, target);
+  const isCrit = payload.critForced != null ? Boolean(payload.critForced) : naturalCrit;
   const pack = (isCrit ? payload.critDamage : payload.damage) ?? payload.damage;
   const parts = pack?.a ?? pack?.b ?? [];
-  return { parts, isCrit, index, pack };
+  return { parts, isCrit, naturalCrit, index, pack };
 }

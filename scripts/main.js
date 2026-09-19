@@ -1,7 +1,7 @@
 import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
 import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, hasTemplatePlacement, activityHasArea, placeActivityTemplates } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
-import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, collectApplyableEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
+import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, serializeEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
 import { shouldApplyReliableTalent } from "./features.js";
 import { enablePlayerTokenSelect } from "./select.js";
@@ -179,7 +179,8 @@ async function handleActivity(activity, usageConfig={}, results={}) {
         onSave: activity.damage?.onSave ?? "half",
         saveAbilities: [...(activity.save?.ability ?? [])],
         damage,
-        critDamage
+        critDamage,
+        effects: serializeEffects(item, activity)
       };
       rememberTargets(payload);
       await postCard(payload, { actor });
@@ -199,16 +200,10 @@ async function handleActivity(activity, usageConfig={}, results={}) {
     }
 
     if (activity.type === "utility") {
-      const listed = collectApplyableEffects(item, activity);
-      const effects = listed.map(e => ({
-        id: e.id,
-        name: e.name,
-        img: e.img
-      }));
       await postCard({
         ...base,
         kind: "utility",
-        effects,
+        effects: serializeEffects(item, activity),
         concentrationUuid: results.effects?.[0]?.uuid ?? ""
       }, { actor });
       return;
@@ -352,8 +347,8 @@ Hooks.once("ready", () => {
     }
   });
 
-  Hooks.on("dnd5e.createMeasuredTemplate", (_activity, regionData) => {
-    prepareIrisRegionData(regionData);
+  Hooks.on("dnd5e.createMeasuredTemplate", (activity, regionData) => {
+    prepareIrisRegionData(regionData, activity);
   });
 
   Hooks.on("preCreateRegion", (_doc, data) => {

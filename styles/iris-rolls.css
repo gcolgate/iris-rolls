@@ -593,8 +593,55 @@
   cursor: help;
 }
 
-.iris-dmg-bonus {
+.iris-dmg-bonus-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
   padding: 0.18rem 0 0.08rem;
+}
+
+.iris-crit-toggle {
+  flex: 0 0 auto;
+  margin: 0;
+  position: relative;
+  left: -1em;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  color: var(--iris-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.iris-crit-toggle:hover {
+  border-color: rgba(201, 162, 39, 0.55);
+  color: var(--iris-text);
+}
+
+.iris-crit-toggle.is-natural-crit {
+  color: var(--iris-bad);
+  border-color: color-mix(in srgb, var(--iris-bad) 55%, transparent);
+}
+
+.iris-crit-toggle.is-natural-crit:hover {
+  color: var(--iris-bad);
+}
+
+.iris-crit-toggle.is-overridden {
+  color: #5aa7ff;
+  border-color: color-mix(in srgb, #5aa7ff 55%, transparent);
+}
+
+.iris-crit-toggle.is-overridden:hover {
+  color: #5aa7ff;
+}
+
+.iris-dmg-bonus {
+  padding: 0;
   justify-content: flex-end;
 }
 
