@@ -1,12 +1,12 @@
 import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
-import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, hasTemplatePlacement, activityHasArea, placeActivityTemplates } from "./targets.js";
+import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, activityPlacesTemplate, placeActivityTemplates, deletePriorActivityRegions, liveItemRegionUuids, shouldReplacePriorRegions } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, serializeEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
 import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
 import { shouldApplyReliableTalent } from "./features.js";
 import { enablePlayerTokenSelect } from "./select.js";
 
-function skipDialog(config={}, dialog={}, message={}) {
+function skipDialog(config = {}, dialog = {}, message = {}) {
   dialog.configure = false;
   if (config.hookNames?.includes("deathSave")) {
     for (const roll of config.rolls ?? []) {
@@ -30,7 +30,7 @@ function actorFromSubject(subject) {
   return subject.actor ?? subject.parent?.actor ?? null;
 }
 
-async function cardFromD20({ kind, rolls, actor, title, subtitle, extra={} }) {
+async function cardFromD20({ kind, rolls, actor, title, subtitle, extra = {} }) {
   if (state.suppressCards || state.activityDepth) return;
   setRollerFromActor(actor);
   const roll = Array.isArray(rolls) ? rolls[0] : rolls;
@@ -85,7 +85,7 @@ async function rollTargetSaves(activity, targets) {
   return dc;
 }
 
-async function handleActivity(activity, usageConfig={}, results={}) {
+async function handleActivity(activity, usageConfig = {}, results = {}) {
   const actor = activity.actor;
   const item = activity.item;
   const roller = describeActor(actor);
@@ -100,24 +100,35 @@ async function handleActivity(activity, usageConfig={}, results={}) {
     templateUuids = liveTemplateUuids(repeat.irisRepeatTemplates ?? repeat.templates ?? templateUuids);
     const tokens = await tokensInTemplates(templateUuids);
     selectTokens(tokens);
-    targets = targetsFromTokens(tokens, roller.uuid);
+    targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
   } else if (repeat?.irisRepeat || repeat?.targets) {
     templateUuids = liveTemplateUuids(repeat.irisRepeatTemplates ?? repeat.templates ?? []);
     targets = await reviveRepeatTargets(repeat.irisRepeatTargets ?? repeat.targets ?? [], roller.uuid);
     const tokenObjs = tokensFromTargets(targets);
     if (tokenObjs.length) selectTokens(tokenObjs);
   } else if (templateUuids.length) {
+    await deletePriorActivityRegions(rolling, { keepUuids: templateUuids });
     const tokens = await tokensInTemplates(templateUuids);
     selectTokens(tokens);
-    targets = targetsFromTokens(tokens, roller.uuid);
-  } else if (activityHasArea(rolling) || activityHasArea(activity)) {
+    targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
+  } else if (activityPlacesTemplate(rolling) || activityPlacesTemplate(activity)) {
     const created = await placeActivityTemplates(rolling);
     templateUuids = created.map(doc => doc.uuid);
     const tokens = await tokensInTemplates(templateUuids);
     selectTokens(tokens);
-    targets = targetsFromTokens(tokens, roller.uuid);
+    targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
   } else {
     targets = resolveTargets(roller.uuid, { activity: rolling, scaling: consumption.scaling });
+    // Enter / turn saves: use creatures already in this spell's live aura, not the caster.
+    if (!targets.length) {
+      const live = liveItemRegionUuids(rolling);
+      if (live.length) {
+        templateUuids = live;
+        const tokens = await tokensInTemplates(live);
+        selectTokens(tokens);
+        targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
+      }
+    }
   }
   setRollerFromActor(actor);
   const slotLabel = consumption.spellPoints
@@ -312,6 +323,17 @@ Hooks.once("ready", () => {
       }).catch(err => console.error(`${MODULE_ID} | slot prompt`, err));
       return false;
     }
+    // Only replace prior regions when stacking would be illegal (concentration, self emanation, instantaneous).
+    if (activityPlacesTemplate(activity) && shouldReplacePriorRegions(activity)
+      && !usageConfig.irisPriorCleared && !usageConfig.irisRepeat) {
+      const usage = foundry.utils.deepClone(usageConfig);
+      const dialog = foundry.utils.deepClone(dialogConfig);
+      const message = foundry.utils.deepClone(messageConfig);
+      void deletePriorActivityRegions(activity).then(() => {
+        retryActivityUse(activity, { ...usage, irisPriorCleared: true }, dialog, message);
+      }).catch(err => console.error(`${MODULE_ID} | prior region cleanup`, err));
+      return false;
+    }
 
     usageConfig.subsequentActions = false;
     messageConfig.create = false;
@@ -341,9 +363,10 @@ Hooks.once("ready", () => {
     }
     usageConfig.irisSnapshot = snapshotConsumption(activity, usageConfig);
     if (usageConfig.irisRepeat) usageConfig.create = false;
-    else if (activity.target?.template?.type) {
+    else if (activityPlacesTemplate(activity)) {
+      // Always ask the system to place area regions (emanations attach on token click).
       usageConfig.create ??= {};
-      usageConfig.create.measuredTemplate = hasTemplatePlacement();
+      usageConfig.create.measuredTemplate = true;
     }
   });
 

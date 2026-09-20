@@ -527,7 +527,17 @@ function waitForRegionReady(region) {
   });
 }
 
-export async function tokensInTemplates(uuids=[]) {
+function regionOriginUuids(regions=[]) {
+  const origins = new Set();
+  for (const region of regions) {
+    const doc = region?.document ?? region;
+    const origin = doc?.flags?.dnd5e?.origin;
+    if (origin) origins.add(origin);
+  }
+  return origins;
+}
+
+export async function tokensInTemplates(uuids=[], { excludeOrigins=true }={}) {
   const regions = [];
   for (const uuid of uuids) {
     let doc = null;
@@ -537,6 +547,7 @@ export async function tokensInTemplates(uuids=[]) {
     await waitForRegionReady(region);
     regions.push(region);
   }
+  const origins = excludeOrigins ? regionOriginUuids(regions) : new Set();
   const seen = new Set();
   const tokens = [];
   for (const token of canvas.tokens?.placeables ?? []) {
@@ -544,6 +555,8 @@ export async function tokensInTemplates(uuids=[]) {
     if (!game.user.isGM && tokenIsHidden(token, token.document)) continue;
     const id = tokenId(token);
     if (!id || seen.has(id)) continue;
+    const tokenUuid = token.document?.uuid ?? id;
+    if (origins.has(tokenUuid)) continue;
     const inside = regions.some(region => tokenIntersectsRegion(token, region));
     if (!inside) continue;
     seen.add(id);
@@ -552,13 +565,14 @@ export async function tokensInTemplates(uuids=[]) {
   return tokens;
 }
 
-export function targetsFromTokens(tokens=[], rollerUuid="") {
+export function targetsFromTokens(tokens=[], rollerUuid="", { excludeRoller=false }={}) {
   const seenToken = new Set();
   const targets = [];
   for (const token of tokens) {
     const actor = token.actor;
     if (!actor) continue;
     const isRoller = isSameActor(actor, rollerUuid);
+    if (excludeRoller && isRoller) continue;
     const id = tokenId(token);
     if (!id || seenToken.has(id)) continue;
     seenToken.add(id);
@@ -772,7 +786,7 @@ function activityFromRegion(region) {
   try { return fromUuidSync(uuid); } catch { return null; }
 }
 
-export function activityDamageElements(activity) {
+function collectDamageTypes(activity) {
   if (!activity) return [];
   const collected = [];
   for (const part of activity.damage?.parts ?? []) collected.push(...typesFromPart(part));
@@ -780,7 +794,22 @@ export function activityDamageElements(activity) {
   if (!collected.length && activity.item?.system?.damage?.base) {
     collected.push(...typesFromPart(activity.item.system.damage.base));
   }
-  const unique = [...new Set(collected.map(t => String(t || "").toLowerCase()).filter(Boolean))];
+  return collected.map(t => String(t || "").toLowerCase()).filter(Boolean);
+}
+
+/** Damage types on this activity, or sibling activities on the same item (e.g. aura cast → save). */
+export function activityDamageElements(activity) {
+  if (!activity) return [];
+  let collected = collectDamageTypes(activity);
+  if (!collected.length) {
+    const siblings = activity.item?.system?.activities;
+    const list = siblings?.contents ?? siblings ?? [];
+    for (const other of list) {
+      if (!other || other === activity || other.id === activity.id) continue;
+      collected.push(...collectDamageTypes(other));
+    }
+  }
+  const unique = [...new Set(collected)];
   unique.sort((a, b) => {
     const rank = t => (ENERGY_ELEMENTS.has(t) ? 0 : PHYSICAL_ELEMENTS.has(t) ? 2 : 1);
     return rank(a) - rank(b);
@@ -803,12 +832,13 @@ function fallbackShapeFromActivity(activity) {
 }
 
 function tagIrisRegion(region, activity) {
+  // Aura casts often have no damage on the placement activity; fall back to siblings, then unknown.
   const elements = activityDamageElements(activity);
-  if (!elements.length) return;
+  const taggedElements = elements.length ? elements : ["unknown"];
   region.flags ??= {};
   region.flags["iris-rolls"] ??= {};
   const current = region.flags["iris-rolls"].region ?? {};
-  const tagged = { ...current, elements };
+  const tagged = { ...current, elements: taggedElements };
   if (!foundryShapeType(region)) {
     const shape = fallbackShapeFromActivity(activity);
     if (shape) tagged.shape = shape;
@@ -859,11 +889,73 @@ export function hasTemplatePlacement() {
   return typeof dnd5e.canvas?.TemplatePlacement?.fromActivity === "function";
 }
 
+/** True when THIS activity places an area (not merely sharing an item-level template). */
+export function activityPlacesTemplate(activity) {
+  return Boolean(activity?.target?.template?.type);
+}
+
 export function activityHasArea(activity) {
   return Boolean(
     activity?.target?.template?.type
     || activity?.item?.system?.target?.template?.type
   );
+}
+
+export function activityTemplateType(activity) {
+  return activity?.target?.template?.type
+    || activity?.item?.system?.target?.template?.type
+    || "";
+}
+
+/** Live scene regions created by this spell/item for the same caster. */
+export function liveItemRegionUuids(activity) {
+  const itemUuid = activity?.item?.uuid;
+  if (!itemUuid || !canvas?.scene?.regions) return [];
+  const actorUuid = activity.actor?.uuid;
+  const uuids = [];
+  for (const region of canvas.scene.regions) {
+    const flags = region.flags?.dnd5e ?? {};
+    if (flags.item !== itemUuid) continue;
+    if (actorUuid && flags.origin) {
+      try {
+        const origin = fromUuidSync(flags.origin);
+        const originActor = origin?.actor?.uuid ?? (origin?.documentName === "Actor" ? origin.uuid : null);
+        if (originActor && originActor !== actorUuid) continue;
+      } catch { /* keep */ }
+    }
+    uuids.push(region.uuid);
+  }
+  return uuids;
+}
+
+export function isEmanationTemplate(activity) {
+  const type = activityTemplateType(activity);
+  if (!type) return false;
+  if (type === "radius" || type === "emanation") return true;
+  return templateShapeType({ type }) === "emanation";
+}
+
+function activityDurationUnits(activity) {
+  return activity?.duration?.units || activity?.item?.system?.duration?.units || "";
+}
+
+function activityRequiresConcentration(activity) {
+  if (!activity) return false;
+  if (activity.requiresConcentration) return true;
+  if (activity.duration?.concentration) return true;
+  const item = activity.item;
+  if (item?.requiresConcentration) return true;
+  if (item?.system?.properties?.has?.("concentration")) return true;
+  if (item?.system?.duration?.concentration) return true;
+  return false;
+}
+
+/** Recasts replace prior regions only when a second copy would be illegal or leftover targeting. */
+export function shouldReplacePriorRegions(activity) {
+  if (!activity) return false;
+  if (activityRequiresConcentration(activity)) return true;
+  if (isEmanationTemplate(activity)) return true;
+  return activityDurationUnits(activity) === "inst";
 }
 
 function activityTemplate(activity) {
@@ -954,9 +1046,10 @@ async function placeIrisRegionFromActivity(activity) {
   if (irisRegionsActive()) preview.color = game.user.color;
   prepareIrisRegionData(preview, activity);
 
+  const attach = type === "emanation" || isEmanationTemplate(activity);
   const drafts = [];
   await canvas.regions.placeRegions([preview], {
-    attachToToken: type === "emanation",
+    attachToToken: attach,
     create: false,
     preConfirm: ({ document }) => {
       drafts.push(document.toObject());
@@ -968,16 +1061,44 @@ async function placeIrisRegionFromActivity(activity) {
   return created.filter(doc => doc?.uuid);
 }
 
+/** Remove prior area regions from the same spell/item so recasts replace the aura. */
+export async function deletePriorActivityRegions(activity, { keepUuids=[] }={}) {
+  if (!shouldReplacePriorRegions(activity)) return [];
+  const itemUuid = activity?.item?.uuid;
+  if (!itemUuid || !canvas?.scene?.regions) return [];
+  const keep = new Set(keepUuids.filter(Boolean));
+  const actorUuid = activity.actor?.uuid;
+  const doomed = [];
+  for (const region of canvas.scene.regions) {
+    if (keep.has(region.uuid)) continue;
+    const flags = region.flags?.dnd5e ?? {};
+    if (flags.item !== itemUuid) continue;
+    if (actorUuid && flags.origin) {
+      try {
+        const origin = fromUuidSync(flags.origin);
+        const originActor = origin?.actor?.uuid ?? (origin?.documentName === "Actor" ? origin.uuid : null);
+        if (originActor && originActor !== actorUuid) continue;
+      } catch { /* keep candidate */ }
+    }
+    doomed.push(region.uuid);
+  }
+  if (doomed.length) await deleteTemplates(doomed);
+  return doomed;
+}
+
 export async function placeActivityTemplates(activity) {
-  if (!activity || !game.user.can("REGION_CREATE") || !canvas?.scene) return [];
+  if (!activity || !canvas?.scene) return [];
   try {
+    await deletePriorActivityRegions(activity);
     if (hasTemplatePlacement()) {
       const created = await dnd5e.canvas.TemplatePlacement.fromActivity(activity);
       if (!created) return [];
       return [...created].filter(doc => doc?.uuid);
     }
+    if (!game.user.can("REGION_CREATE")) return [];
     return await placeIrisRegionFromActivity(activity);
-  } catch {
+  } catch (err) {
+    console.error(`${MODULE_ID} | placeActivityTemplates`, err);
     return [];
   }
 }

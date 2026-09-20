@@ -23,6 +23,14 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
+## What's new in 1.1.8
+
+- Emanation auras such as **Spirit Guardians** place a region that attaches to the caster (you click the token). Iris asks the 5e system to create that region, and only the activity that actually places an area does so — a later save or “enter the aura” activity will not drop a second region.
+- Tokens already standing in that live aura are used for enter/turn saves. The caster, and the token the region is attached to, are not auto-selected as targets.
+- Recasting replaces the previous region only when a second copy would be illegal: **concentration**, a **self emanation**, or an **instantaneous** area (Fireball leftovers). Timed spells without concentration — Grease, Glyph of Warding, Guardian of Faith, Tiny Hut — keep earlier regions. Another caster’s copy of the same spell is left alone. **Again** and **Replace Region** use the same rule.
+- Aura regions pick up damage types from a sibling save or damage activity when the placement activity itself has none, so coloring from **iris-regions** still works. If nothing is found, the region is tagged unknown rather than left untagged.
+- **Again** only asks you to place a new region when that activity actually places an area, not because the spell item has a template somewhere else on it.
+
 ## What's new in 1.1.7
 
 - Attack and damage cards have a **Crit** / **No Crit** toggle next to bonus damage. It follows the roll by default (red when a natural crit), and turns blue when you override it. Changing advantage, the die, or targets re-syncs it.
@@ -47,7 +55,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.7 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7). Older notes: [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.8 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.8). Older notes: [1.1.7](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7), [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
@@ -56,7 +64,7 @@ See the [1.1.7 release notes](https://github.com/gcolgate/iris-rolls/releases/ta
 - If you forgot to select someone after the card is up, change targets on the chat card. The GM can also retarget their latest unapplied NPC card just by changing the selection while chat is visible.
 - Spells that can be upcast ask for a slot or spell-point level before the card posts. You can still change the level on the card afterward.
 - If you forgot advantage or disadvantage, change it on the chat card. Each target can have its own roll, bonus, and advantage mode.
-- Area-effect spells place a region. Tokens in the region are selected as targets automatically, including tokens a player does not own. You can still override that on the card, or remove/replace the region.
+- Area-effect spells place a region. Tokens in the region are selected as targets automatically, including tokens a player does not own. Emanations attach to the caster. You can still override targets on the card, or remove/replace the region. Recasting a concentration or self-emanation aura replaces the old region; lasting areas that are allowed to stack do not.
 - Saves are rolled automatically, including Evasion. Advantage, disadvantage, and some other 5e save rules may still need work.
 - Apply results with **Apply Damage** or **Apply Effect**. **Apply again** lets you apply a second time without undoing the first.
 - Hover damage lines, totals, or a target's applied amount to see each die.

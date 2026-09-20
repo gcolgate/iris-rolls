@@ -1319,7 +1319,7 @@ export async function retarget(message, activity=null, { tokens=null, extra={} }
     limited = scaledActivity(item, payload.activityId, scaling) ?? activity;
   }
   payload.targets = tokens
-    ? targetsFromTokens(tokens, rollerUuid)
+    ? targetsFromTokens(tokens, rollerUuid, { excludeRoller: true })
     : resolveTargets(rollerUuid, { activity: limited, scaling, enforceLimit: false });
   payload.maxTargets = maxTargetCount(limited, { scaling });
 
@@ -1938,7 +1938,6 @@ async function onAgain(message, { free=false }={}) {
     const isTemplate = Boolean(
       rolling?.target?.template?.type
       || activity.target?.template?.type
-      || item?.system?.target?.template?.type
       || (payload.templateUuids ?? []).length
     );
     let newTemplateUuids = [];
