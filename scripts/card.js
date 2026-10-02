@@ -249,6 +249,26 @@ function skillLabel(skill) {
   return game.i18n.localize(CONFIG.DND5E.skills[skill]?.label ?? skill ?? "");
 }
 
+function toPropertySet(properties) {
+  if (properties instanceof Set) return properties;
+  if (Array.isArray(properties)) return new Set(properties.filter(Boolean));
+  if (properties && typeof properties === "object") {
+    return new Set(Object.values(properties).filter(value => typeof value === "string"));
+  }
+  return new Set();
+}
+
+function physicalTraitBypassed(actor, category, type, properties) {
+  if (!type || !CONFIG.DND5E?.damageTypes?.[type]?.isPhysical) return false;
+  const bypasses = actor?.system?.traits?.[category]?.bypasses;
+  if (!bypasses) return false;
+  const props = toPropertySet(properties);
+  if (!props.size) return false;
+  if (typeof bypasses.intersection === "function") return bypasses.intersection(props).size > 0;
+  for (const bypass of bypasses) if (props.has(bypass)) return true;
+  return false;
+}
+
 function previewDamage(actor, parts, multiplier) {
   const empty = { amount: 0, immune: false, resistant: false, vulnerable: false };
   if (!actor || !parts?.length) return empty;
@@ -256,7 +276,7 @@ function previewDamage(actor, parts, multiplier) {
   const damages = parts.map(p => ({
     value: Number(p.total) || 0,
     type: partTypes(p)[0] || p.type || undefined,
-    properties: new Set(p.properties ?? [])
+    properties: toPropertySet(p.properties)
   }));
   if (typeof actor.calculateDamage !== "function") {
     const raw = damageTotal(parts) * multiplier;
@@ -325,7 +345,7 @@ function groupDamageParts(parts=[]) {
     const key = typeKey(type);
     const cur = groups.get(key) ?? { type, total: 0, properties: new Set() };
     cur.total += Number(part.total) || 0;
-    for (const prop of part.properties ?? []) cur.properties.add(prop);
+    for (const prop of toPropertySet(part.properties)) cur.properties.add(prop);
     groups.set(key, cur);
   }
   return [...groups.values()];
@@ -334,21 +354,26 @@ function groupDamageParts(parts=[]) {
 function probeTraits(actor, type, properties) {
   const empty = { immune: false, resistant: false, vulnerable: false, trait: 1 };
   if (!actor) return empty;
-  let immune = actorHasDamageTrait(actor, "di", type);
-  let resistant = actorHasDamageTrait(actor, "dr", type);
-  let vulnerable = actorHasDamageTrait(actor, "dv", type);
+  const props = toPropertySet(properties);
+  let immune = false;
+  let resistant = false;
+  let vulnerable = false;
   if (typeof actor.calculateDamage === "function") {
     const calculated = actor.calculateDamage([{
       value: 100,
       type: type || undefined,
-      properties: properties instanceof Set ? properties : new Set(properties ?? [])
+      properties: props
     }], { multiplier: 1 });
     const row = calculated?.[0];
     if (row) {
-      immune ||= traitActive(row, "immunity");
-      resistant ||= traitActive(row, "resistance");
-      vulnerable ||= traitActive(row, "vulnerability");
+      immune = traitActive(row, "immunity");
+      resistant = traitActive(row, "resistance");
+      vulnerable = traitActive(row, "vulnerability");
     }
+  } else {
+    immune = actorHasDamageTrait(actor, "di", type) && !physicalTraitBypassed(actor, "di", type, props);
+    resistant = actorHasDamageTrait(actor, "dr", type) && !physicalTraitBypassed(actor, "dr", type, props);
+    vulnerable = actorHasDamageTrait(actor, "dv", type);
   }
   let trait = 1;
   if (immune) trait = 0;
@@ -961,7 +986,7 @@ async function applyDamages(actor, parts, multiplier, { ignoreTraits=false }={})
   const damages = parts.map(p => ({
     value: Number(p.total) || 0,
     type: p.type || undefined,
-    properties: new Set(p.properties ?? [])
+    properties: toPropertySet(p.properties)
   }));
   const options = { multiplier };
   if (ignoreTraits) {

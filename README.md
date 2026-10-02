@@ -23,6 +23,12 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
 
+## What's new in 1.1.9
+
+- Magical, silvered, and adamantine weapons now bypass physical immunities and resistances the way 5e intends. A **Magical** morning star hits a werebear; the same weapon with Magical unchecked does not.
+- Weapon properties are taken from the damage roll and from the item itself, so checking **Magical** on the weapon sheet is enough.
+- Issues with **Circle of Death** and issues with **concentration rolls** were not seen locally on D&D 5e **6.0.1**. They may be an issue with **5.3.3**.
+
 ## What's new in 1.1.8
 
 - Emanation auras such as **Spirit Guardians** place a region that attaches to the caster (you click the token). Iris asks the 5e system to create that region, and only the activity that actually places an area does so — a later save or “enter the aura” activity will not drop a second region.
@@ -55,7 +61,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.8 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.8). Older notes: [1.1.7](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7), [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.9 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.9). Older notes: [1.1.8](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.8), [1.1.7](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7), [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
@@ -79,4 +85,3 @@ MIT. See [LICENSE](LICENSE).
 
 # to do
 Do something about echos in the next release
-issues with magic weapons and bludgeoning

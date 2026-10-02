@@ -76,10 +76,19 @@ export function damageTypesFromRoll(roll) {
   return types;
 }
 
-export function serializeDamage(rolls = []) {
+function physicalItemProperties(activity) {
+  const props = activity?.item?.system?.properties;
+  if (!props) return [];
+  return [...props].filter(p => CONFIG.DND5E?.itemProperties?.[p]?.isPhysical);
+}
+
+export function serializeDamage(rolls = [], activity = null) {
+  const fromItem = physicalItemProperties(activity);
   return rolls.map(roll => {
     const types = damageTypesFromRoll(roll);
     const type = types[0] || "";
+    const fromRoll = [...(roll.options?.properties ?? [])];
+    const properties = [...new Set([...fromRoll, ...fromItem])];
     const dice = (roll.dice ?? []).map(die => ({
       formula: die.expression || `${die.number}d${die.faces}`,
       faces: die.faces,
@@ -94,7 +103,7 @@ export function serializeDamage(rolls = []) {
       total: roll.total,
       type,
       types,
-      properties: [...(roll.options?.properties ?? [])],
+      properties,
       dice,
       tooltip: formatDamageTooltip({ formula: roll.formula, total: roll.total, type, dice })
     };
@@ -127,9 +136,10 @@ export function formatPartsTooltip(parts = [], bonus = 0) {
 // we need to roll then both so we can switch them if needed without asking for more rolls
 export async function rollNormalAndCritDamage(activity, { isCritical = false } = {}) {
   const a = await rollQuiet(activity, "rollDamage", { isCritical });
+  const serialized = serializeDamage(a, activity);
   return {
-    a: serializeDamage(a),
-    b: serializeDamage(a)
+    a: serialized,
+    b: serialized
   };
 }
 
