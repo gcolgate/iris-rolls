@@ -125,11 +125,72 @@ export function wouldConsumeSpellSlot(activity, usageConfig={}) {
 
 export function needsSlotPick(activity, usageConfig={}) {
   if (usageConfig?.irisSlotPicked || usageConfig?.irisRepeat || usageConfig?.irisReaction) return false;
+  if (usageConfig?.irisReuseCast) return false;
   return Boolean(activity?.canScale && activity?.requiresSpellSlot && activity?.item?.system?.level > 0);
+}
+
+function slotKeyForLevel(actor, item, level) {
+  const mode = item?.system?.preparation?.mode;
+  if (mode && mode !== "prepared" && mode !== "always" && mode in (actor?.system?.spells ?? {})) return mode;
+  return `spell${level}`;
+}
+
+/** Cast level already locked in by concentration or a live region from this spell. */
+export function rememberedCastScaling(activity) {
+  const item = activity?.item;
+  const actor = activity?.actor ?? item?.actor;
+  if (!item || !actor) return null;
+  const base = Number(item.system?.level) || 0;
+
+  const fromFlags = flags => {
+    if (!flags) return null;
+    const scaling = Number(flags.scaling);
+    const flagged = Number(flags.spellLevel?.value ?? flags.spellLevel);
+    let level = base;
+    if (Number.isFinite(scaling) && scaling >= 0) level = base + scaling;
+    if (Number.isFinite(flagged) && flagged > level) level = flagged;
+    if (level < 1 && !base) return null;
+    if (level < base) level = base;
+    return {
+      level,
+      scaling: Math.max(0, level - base),
+      key: slotKeyForLevel(actor, item, level)
+    };
+  };
+
+  for (const effect of actor.concentration?.effects ?? []) {
+    const data = effect.flags?.dnd5e?.item;
+    if (data?.id !== item.id && data?.uuid !== item.uuid) continue;
+    const remembered = fromFlags(effect.flags?.dnd5e);
+    if (remembered) return remembered;
+  }
+
+  for (const region of canvas?.scene?.regions ?? []) {
+    const flags = region.flags?.dnd5e ?? {};
+    if (flags.item !== item.uuid) continue;
+    const remembered = fromFlags(flags);
+    if (remembered) return remembered;
+  }
+  return null;
+}
+
+export function applyRememberedCast(usageConfig, remembered) {
+  if (!remembered) return usageConfig;
+  usageConfig.irisSlotPicked = true;
+  usageConfig.irisReuseCast = true;
+  usageConfig.scaling = remembered.scaling;
+  usageConfig.spell = { ...(usageConfig.spell ?? {}), slot: remembered.key };
+  if (usageConfig.consume !== false) {
+    if (usageConfig.consume === true || usageConfig.consume == null) usageConfig.consume = {};
+    usageConfig.consume.spellSlot = false;
+    usageConfig.consume.spellPoints = false;
+  }
+  return usageConfig;
 }
 
 export function shouldUseSpellPoints(activity, usageConfig={}) {
   try {
+    if (usageConfig?.irisReuseCast) return false;
     const actor = activity?.actor ?? activity?.item?.actor ?? activity?.item?.parent;
     if (!actor || !getSpellPointsItem(actor)) return false;
     if (activity.item?.type !== "spell" && !activity.isSpell) return false;

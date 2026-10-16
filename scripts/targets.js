@@ -140,6 +140,8 @@ export function maxTargetCount(activity, { scaling=0 }={}) {
   const fromSource = evaluateCount(sourceFormula, activity, scaling);
   const fromPrepared = evaluateCount(prepared, activity, scaling);
   const n = Math.max(fromSource || 0, fromPrepared || 0);
+  // Areas and emanations affect everyone inside; do not cap them at "1 creature".
+  if (template) return null;
   if (n > 0) return n;
 
   // Heroism, Polymorph, and similar: one creature, plus one per extra slot level.

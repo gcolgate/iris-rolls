@@ -2,7 +2,7 @@ import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACT
 import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, activityPlacesTemplate, placeActivityTemplates, deletePriorActivityRegions, liveItemRegionUuids, shouldReplacePriorRegions } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, serializeEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
-import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick } from "./resources.js";
+import { snapshotConsumption, finalizeConsumption, scaledActivity, shouldUseSpellPoints, getSpellPointsItem, spellPointCostForLevel, spellPointsRemaining, slotKeyLevel, slotLevelLabel, needsSlotPick, rememberedCastScaling, applyRememberedCast } from "./resources.js";
 import { shouldApplyReliableTalent } from "./features.js";
 import { enablePlayerTokenSelect } from "./select.js";
 
@@ -118,16 +118,15 @@ async function handleActivity(activity, usageConfig = {}, results = {}) {
     selectTokens(tokens);
     targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
   } else {
-    targets = resolveTargets(roller.uuid, { activity: rolling, scaling: consumption.scaling });
-    // Enter / turn saves: use creatures already in this spell's live aura, not the caster.
-    if (!targets.length) {
-      const live = liveItemRegionUuids(rolling);
-      if (live.length) {
-        templateUuids = live;
-        const tokens = await tokensInTemplates(live);
-        selectTokens(tokens);
-        targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
-      }
+    // Enter / turn saves: always use creatures in this spell's live aura, not the current selection.
+    const live = liveItemRegionUuids(rolling);
+    if (live.length) {
+      templateUuids = live;
+      const tokens = await tokensInTemplates(live);
+      selectTokens(tokens);
+      targets = targetsFromTokens(tokens, roller.uuid, { excludeRoller: true });
+    } else {
+      targets = resolveTargets(roller.uuid, { activity: rolling, scaling: consumption.scaling });
     }
   }
   setRollerFromActor(actor);
@@ -305,6 +304,13 @@ Hooks.once("ready", () => {
         retryActivityUse(activity, { ...usage, irisTargetsReady: true }, dialog, message);
       }).catch(err => console.error(`${MODULE_ID} | target prompt`, err));
       return false;
+    }
+
+    // Follow-up aura/save activities reuse the concentrated (or live-region) cast level.
+    if (!usageConfig.irisSlotPicked && !usageConfig.irisRepeat && !usageConfig.irisReaction
+      && !activityPlacesTemplate(activity)) {
+      const remembered = rememberedCastScaling(activity);
+      if (remembered) applyRememberedCast(usageConfig, remembered);
     }
 
     if (needsSlotPick(activity, usageConfig)) {
