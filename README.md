@@ -8,7 +8,7 @@ This release is for testing (including The Forge). Treat it as alpha. It is slow
 
 ## Requirements
 
-- Foundry Virtual Tabletop v14
+- Foundry Virtual Tabletop **14.368**
 - [D&D 5e](https://foundryvtt.com/packages/dnd5e) 5.3.3 or later (verified on 6.0.1; 5.3.3 is untested)
 
 Do not enable this together with Midi QOL or Ready Set Roll. Those modules also replace 5e roll cards, and Iris Rolls will warn if they are active.
@@ -22,6 +22,11 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 ```
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
+
+## What's new in 1.1.11
+
+- Requires and is verified on Foundry VTT **14.368**.
+- Includes the 1.1.10 Spirit Guardians work: follow-up saves target everyone in the live emanation, areas are not capped at one creature, and concentrating reuses the cast level instead of asking for another slot.
 
 ## What's new in 1.1.10
 
@@ -67,7 +72,7 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 - Area regions keep their real circle/cone. Grid-Based is off, and highlight is the shape itself instead of covered grid squares.
 - Resistance, immunity, and vulnerability follow D&D 5e 6.0 (including all-damage resistance). Mixed attacks keep types separate, so fire resistance halves only the fire part of something like Flame Sword (slashing + fire).
 
-See the [1.1.10 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.10). Older notes: [1.1.9](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.9), [1.1.8](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.8), [1.1.7](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7), [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
+See the [1.1.11 release notes](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.11). Older notes: [1.1.10](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.10), [1.1.9](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.9), [1.1.8](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.8), [1.1.7](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.7), [1.1.6](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.6), [1.1.5](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.5), [1.1.4](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.4), [1.1.3](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.3), [1.1.2](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.2), [1.1.1](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.1), [1.1.0](https://github.com/gcolgate/iris-rolls/releases/tag/1.1.0).
 
 ## How it works
 
