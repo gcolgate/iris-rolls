@@ -1,5 +1,8 @@
+import { state } from "./constants.js";
+
 function canPlayerSelect(token, user) {
   if (!user || user.isGM) return false;
+  if (state.placingArea) return false;
   if (token.isPreview || !token.layer?.active) return false;
   if (token.visible === false) return false;
   const doc = token.document;
@@ -20,21 +23,37 @@ export function enablePlayerTokenSelect() {
   const originalControl = proto._canControl;
   const originalDrag = proto._canDrag;
   const originalDragStart = proto._canDragLeftStart;
+  const originalHover = proto._canHover;
 
   proto._canControl = function(user, event) {
+    if (state.placingArea) return false;
     if (originalControl.call(this, user, event)) return true;
     return canPlayerSelect(this, user);
   };
 
   proto._canDrag = function(user, event) {
+    if (state.placingArea) return false;
     if (!canUpdateToken(this, user)) return false;
     return originalDrag.call(this, user, event);
   };
 
   if (typeof originalDragStart === "function") {
     proto._canDragLeftStart = function(user, event, options) {
+      if (state.placingArea) return false;
       if (!canUpdateToken(this, user)) return false;
       return originalDragStart.call(this, user, event, options);
+    };
+  }
+
+  if (typeof originalHover === "function") {
+    proto._canHover = function(user, event) {
+      if (state.placingArea) {
+        if (this.isPreview || this.visible === false) return false;
+        const doc = this.document;
+        if (!doc || (!user?.isGM && (doc.hidden || doc.isSecret))) return false;
+        return Boolean(this.actor);
+      }
+      return originalHover.call(this, user, event);
     };
   }
 }

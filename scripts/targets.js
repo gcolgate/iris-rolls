@@ -859,14 +859,50 @@ export function prepareIrisRegionData(regionData, activity=null) {
   }
 }
 
+function tokenIdFromAttachment(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.id || value._id || "";
+}
+
+function playerCanUpdateToken(tokenDoc) {
+  if (!tokenDoc) return false;
+  if (game.user.isGM) return true;
+  return Boolean(
+    tokenDoc.canUserModify?.(game.user, "update")
+    || tokenDoc.isOwner
+    || tokenDoc.actor?.isOwner
+  );
+}
+
+function stripUnownedAttachment(document) {
+  const tokenId = tokenIdFromAttachment(document?.attachment?.token);
+  if (!tokenId || playerCanUpdateToken(canvas.scene?.tokens?.get?.(tokenId))) return;
+  document.updateSource?.({ "attachment.token": null });
+}
+
 export function wrapRegionPlacement() {
   const layer = canvas?.regions;
   if (!layer?.placeRegions || layer.placeRegions._iris) return;
   const original = layer.placeRegions.bind(layer);
-  const wrapped = function(data, options) {
+  const wrapped = async function(data, options={}) {
     const list = Array.isArray(data) ? data : (data ? [data] : []);
-    if (list.some(isSpellAreaRegion)) prepareIrisRegionData(list);
-    return original(data, options);
+    const placingArea = list.some(isSpellAreaRegion);
+    if (placingArea) prepareIrisRegionData(list);
+    const opts = { ...options };
+    if (placingArea) {
+      const inner = opts.preConfirm;
+      opts.preConfirm = ctx => {
+        stripUnownedAttachment(ctx?.document);
+        return inner?.(ctx);
+      };
+    }
+    if (placingArea) state.placingArea += 1;
+    try {
+      return await original(list, opts);
+    } finally {
+      if (placingArea) state.placingArea = Math.max(0, state.placingArea - 1);
+    }
   };
   wrapped._iris = true;
   layer.placeRegions = wrapped;

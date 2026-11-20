@@ -7,6 +7,7 @@ export const state = {
   suppressCards: 0,
   activityDepth: 0,
   liveRetargetPause: 0,
+  placingArea: 0,
   rollerUuid: "",
   repeatTargets: null,
   repeat: null,
