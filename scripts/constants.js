@@ -16,6 +16,13 @@ export const state = {
 
 export const HANDLED_ACTIVITIES = new Set(["attack", "save", "damage", "heal", "check", "utility"]);
 
+export function woundMode(actor) {
+  const statuses = actor?.statuses;
+  if (typeof statuses?.has !== "function") return "normal";
+  if (statuses.has("wounded") || statuses.has("severelyWounded")) return "disadvantage";
+  return "normal";
+}
+
 export function localize(key, data) {
   const s = game.i18n.localize(`IRISROLLS.${key}`);
   return data ? game.i18n.format(`IRISROLLS.${key}`, data) : s;

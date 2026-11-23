@@ -1,4 +1,4 @@
-import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, localize, renderHbs, getPayload, hasPayload, state } from "./constants.js";
+import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, localize, renderHbs, getPayload, hasPayload, state, woundMode } from "./constants.js";
 import { describeActor, resolveTargets, pickSaveAbility, hasEvasion, isDexSave, maxTargetCount, liveTemplateUuids, tokensInTemplates, targetsFromTokens, selectTokens, setRollerFromActor, placeActivityTemplates, deleteTemplates, actorFromTarget, actorFromTargetSync, liveArmorClass, hasNonRollerSelection } from "./targets.js";
 import { dualFromRoll, usedDieIndex, rollTotal, damageTotal, selectDamage, naturalDamageCrit, rollQuiet, rollNormalAndCritDamage, rollD20Face, formatDamageTooltip, formatPartsTooltip } from "./dice.js";
 import { listDieOptions, consumeDieOption, consumeFeatureUse } from "./features.js";
@@ -193,7 +193,7 @@ export async function fillTargetAttack(target, activity) {
     target.d20 = dual.d20;
     target.bonus = dual.bonus;
   }
-  target.mode ??= "normal";
+  target.mode ??= woundMode(activity?.actor);
   target.situational ??= 0;
   return rolls;
 }
@@ -212,7 +212,7 @@ export async function fillTargetSave(target, activity, dc, saveAbilities=[]) {
   }
   target.saveAbility = ability;
   target.evasion = hasEvasion(actor);
-  target.saveMode ??= "normal";
+  target.saveMode ??= woundMode(actor);
   target.saveSituational ??= 0;
   target.img = describeActor(actor).img;
   target.ac = liveArmorClass(actor, target.ac);
@@ -869,7 +869,7 @@ export async function postConcentrationCard(rolls, actor) {
   const spellName = item?.name || String(effect?.name ?? "").replace(/^.*?:\s*/, "") || localize("Concentration");
   return postCard({
     kind: "concentration",
-    mode: "normal",
+    mode: woundMode(actor),
     title: actor.name,
     subtitle: localize("ConcentratingOn", { name: spellName }),
     itemImg: item?.img || actor.img,

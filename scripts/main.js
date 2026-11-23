@@ -1,4 +1,4 @@
-import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize } from "./constants.js";
+import { MODULE_ID, TEMPLATE, DIE_EDIT_TEMPLATE, SLOT_PICK_TEMPLATE, HANDLED_ACTIVITIES, state, localize, woundMode } from "./constants.js";
 import { describeActor, resolveTargets, maxTargetCount, templateUuidsFromResults, tokensInTemplates, selectTokens, targetsFromTokens, setRollerFromActor, wrapSpeakerForIrisRoller, bindSheetAsRoller, reviveRepeatTargets, tokensFromTargets, liveTemplateUuids, attackNeedsTarget, waitForAttackTargets, prepareIrisRegionData, wrapRegionPlacement, activityPlacesTemplate, placeActivityTemplates, deletePriorActivityRegions, liveItemRegionUuids, shouldReplacePriorRegions } from "./targets.js";
 import { dualFromRoll, rollQuiet, rollNormalAndCritDamage } from "./dice.js";
 import { postCard, bindCardListeners, handleSocket, abilityLabel, skillLabel, postConcentrationCard, serializeEffects, fillTargetAttack, fillTargetSave, rememberTargets, promptSpellSlot } from "./card.js";
@@ -43,7 +43,7 @@ async function cardFromD20({ kind, rolls, actor, title, subtitle, extra = {} }) 
     : resolveTargets(roller.uuid, { activity });
   const payload = {
     kind,
-    mode: "normal",
+    mode: woundMode(actor),
     title,
     subtitle,
     roller,
@@ -63,14 +63,14 @@ async function cardFromD20({ kind, rolls, actor, title, subtitle, extra = {} }) 
       if (i === 0) {
         target.d20 = dual.d20;
         target.bonus = dual.bonus;
-        target.mode = "normal";
+        target.mode = woundMode(actor);
         target.situational = 0;
       } else if (activityDoc) {
         await fillTargetAttack(target, activityDoc);
       } else {
         target.d20 = dual.d20;
         target.bonus = dual.bonus;
-        target.mode = "normal";
+        target.mode = woundMode(actor);
         target.situational = 0;
       }
     }
@@ -143,7 +143,7 @@ async function handleActivity(activity, usageConfig = {}, results = {}) {
     roller,
     targets,
     maxTargets: maxTargetCount(rolling, { scaling: consumption.scaling }),
-    mode: "normal",
+    mode: activity.type === "attack" ? woundMode(actor) : "normal",
     situational: 0,
     critThreshold: activity.criticalThreshold ?? 20,
     consumption,

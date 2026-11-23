@@ -8,7 +8,7 @@ This release is for testing (including The Forge). Treat it as alpha. It is slow
 
 ## Requirements
 
-- Foundry Virtual Tabletop **14.368**
+- Foundry Virtual Tabletop **14.367**
 - [D&D 5e](https://foundryvtt.com/packages/dnd5e) 5.3.3 or later (verified on 6.0.1; 5.3.3 is untested)
 
 Do not enable this together with Midi QOL or Ready Set Roll. Those modules also replace 5e roll cards, and Iris Rolls will warn if they are active.
@@ -22,6 +22,10 @@ https://github.com/gcolgate/iris-rolls/releases/latest/download/module.json
 ```
 
 **From this repo** (local development): copy or clone the `iris-rolls` folder into `{userData}/Data/modules/iris-rolls`.
+
+## What's new in 1.1.13
+
+- If Automatic Wounds is enabled, a creature with **Wounded** or **Severely Wounded** starts Iris cards at disadvantage (attacks, saves, checks, and concentration).
 
 ## What's new in 1.1.12
 
